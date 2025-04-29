@@ -20,8 +20,6 @@ package org.apache.seatunnel.connectors.seatunnel.kafka.source;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
-import org.apache.seatunnel.api.table.catalog.CatalogOptions;
-import org.apache.seatunnel.api.table.catalog.schema.TableSchemaOptions;
 import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
@@ -47,8 +45,8 @@ public class KafkaSourceFactory implements TableSourceFactory {
                 .required(KafkaSourceOptions.BOOTSTRAP_SERVERS)
                 .exclusive(
                         KafkaSourceOptions.TOPIC,
-                        TableSchemaOptions.TABLE_CONFIGS,
-                        CatalogOptions.TABLE_LIST)
+                        KafkaSourceOptions.TABLE_CONFIGS,
+                        KafkaSourceOptions.TABLE_LIST)
                 .optional(
                         KafkaSourceOptions.START_MODE,
                         KafkaSourceOptions.PATTERN,
@@ -59,7 +57,8 @@ public class KafkaSourceFactory implements TableSourceFactory {
                         KafkaSourceOptions.FORMAT,
                         KafkaSourceOptions.DEBEZIUM_RECORD_INCLUDE_SCHEMA,
                         KafkaSourceOptions.DEBEZIUM_RECORD_TABLE_FILTER,
-                        KafkaSourceOptions.KEY_PARTITION_DISCOVERY_INTERVAL_MILLIS)
+                        KafkaSourceOptions.KEY_PARTITION_DISCOVERY_INTERVAL_MILLIS,
+                        KafkaSourceOptions.READER_CACHE_QUEUE_SIZE)
                 .conditional(
                         KafkaSourceOptions.START_MODE,
                         StartMode.TIMESTAMP,

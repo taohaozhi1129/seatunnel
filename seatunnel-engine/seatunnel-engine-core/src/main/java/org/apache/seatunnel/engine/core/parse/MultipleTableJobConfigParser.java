@@ -21,10 +21,10 @@ import org.apache.seatunnel.shade.com.google.common.base.Preconditions;
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
-import org.apache.seatunnel.api.common.CommonOptions;
 import org.apache.seatunnel.api.common.PluginIdentifier;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.env.EnvCommonOptions;
+import org.apache.seatunnel.api.options.ConnectorCommonOptions;
+import org.apache.seatunnel.api.options.EnvCommonOptions;
 import org.apache.seatunnel.api.sink.SaveModeExecuteLocation;
 import org.apache.seatunnel.api.sink.SaveModeExecuteWrapper;
 import org.apache.seatunnel.api.sink.SaveModeHandler;
@@ -339,8 +339,8 @@ public class MultipleTableJobConfigParser {
     private int getParallelism(ReadonlyConfig config) {
         return Math.max(
                 1,
-                config.getOptional(CommonOptions.PARALLELISM)
-                        .orElse(envOptions.get(CommonOptions.PARALLELISM)));
+                config.getOptional(EnvCommonOptions.PARALLELISM)
+                        .orElse(envOptions.get(EnvCommonOptions.PARALLELISM)));
     }
 
     public Tuple2<String, List<Tuple2<CatalogTable, Action>>> parseSource(
@@ -348,7 +348,7 @@ public class MultipleTableJobConfigParser {
         final ReadonlyConfig readonlyConfig = ReadonlyConfig.fromConfig(sourceConfig);
         final String factoryId = getFactoryId(readonlyConfig);
         final String tableId =
-                readonlyConfig.getOptional(CommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
+                readonlyConfig.getOptional(ConnectorCommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
 
         final int parallelism = getParallelism(readonlyConfig);
 
@@ -440,7 +440,7 @@ public class MultipleTableJobConfigParser {
         }
 
         final String tableId =
-                readonlyConfig.getOptional(CommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
+                readonlyConfig.getOptional(ConnectorCommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
 
         Set<Action> inputActions =
                 inputs.stream()
@@ -454,7 +454,7 @@ public class MultipleTableJobConfigParser {
         checkProducedTypeEquals(inputActions);
         int spareParallelism = inputs.get(0)._2().getParallelism();
         int parallelism =
-                readonlyConfig.getOptional(CommonOptions.PARALLELISM).orElse(spareParallelism);
+                readonlyConfig.getOptional(EnvCommonOptions.PARALLELISM).orElse(spareParallelism);
         SeaTunnelTransform<?> transform =
                 FactoryUtil.createAndPrepareMultiTableTransform(
                         new ArrayList<>(catalogTables), readonlyConfig, classLoader, factoryId);
@@ -690,6 +690,8 @@ public class MultipleTableJobConfigParser {
                         actionConfig);
         if (!isStartWithSavePoint) {
             handleSaveMode(sink);
+        } else {
+            handleSchemaSaveModeWithRestore(sink);
         }
         sinkAction.setParallelism(parallelism);
         return sinkAction;
@@ -708,6 +710,25 @@ public class MultipleTableJobConfigParser {
                     try (SaveModeHandler handler = saveModeHandler.get()) {
                         handler.open();
                         new SaveModeExecuteWrapper(handler).execute();
+                    } catch (Exception e) {
+                        throw new SeaTunnelRuntimeException(HANDLE_SAVE_MODE_FAILED, e);
+                    }
+                }
+            }
+        }
+    }
+
+    public void handleSchemaSaveModeWithRestore(SeaTunnelSink<?, ?, ?, ?> sink) {
+        if (SupportSaveMode.class.isAssignableFrom(sink.getClass())) {
+            SupportSaveMode saveModeSink = (SupportSaveMode) sink;
+            if (envOptions
+                    .get(EnvCommonOptions.SAVEMODE_EXECUTE_LOCATION)
+                    .equals(SaveModeExecuteLocation.CLIENT)) {
+                Optional<SaveModeHandler> saveModeHandler = saveModeSink.getSaveModeHandler();
+                if (saveModeHandler.isPresent()) {
+                    try (SaveModeHandler handler = saveModeHandler.get()) {
+                        handler.open();
+                        handler.handleSchemaSaveModeWithRestore();
                     } catch (Exception e) {
                         throw new SeaTunnelRuntimeException(HANDLE_SAVE_MODE_FAILED, e);
                     }

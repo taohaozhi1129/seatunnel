@@ -18,42 +18,40 @@
 package org.apache.seatunnel.connectors.seatunnel.maxcompute.source;
 
 import org.apache.seatunnel.api.configuration.util.OptionRule;
+import org.apache.seatunnel.api.options.ConnectorCommonOptions;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
+import org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeSourceOptions;
 
 import com.google.auto.service.AutoService;
 
 import java.io.Serializable;
 
-import static org.apache.seatunnel.api.table.catalog.schema.TableSchemaOptions.SCHEMA;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.ACCESS_ID;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.ACCESS_KEY;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.ENDPOINT;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.PARTITION_SPEC;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.PLUGIN_NAME;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.PROJECT;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.READ_COLUMNS;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.SPLIT_ROW;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.TABLE_LIST;
-import static org.apache.seatunnel.connectors.seatunnel.maxcompute.config.MaxcomputeConfig.TABLE_NAME;
-
 @AutoService(Factory.class)
 public class MaxcomputeSourceFactory implements TableSourceFactory {
     @Override
     public String factoryIdentifier() {
-        return PLUGIN_NAME;
+        return MaxcomputeSourceOptions.PLUGIN_NAME;
     }
 
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .required(ACCESS_ID, ACCESS_KEY, ENDPOINT)
-                .optional(PARTITION_SPEC, SPLIT_ROW, SCHEMA, PROJECT, READ_COLUMNS)
-                .exclusive(TABLE_LIST, TABLE_NAME)
+                .required(
+                        MaxcomputeSourceOptions.ACCESS_ID,
+                        MaxcomputeSourceOptions.ACCESS_KEY,
+                        MaxcomputeSourceOptions.ENDPOINT)
+                .optional(
+                        MaxcomputeSourceOptions.PARTITION_SPEC,
+                        MaxcomputeSourceOptions.SPLIT_ROW,
+                        ConnectorCommonOptions.SCHEMA,
+                        MaxcomputeSourceOptions.PROJECT,
+                        MaxcomputeSourceOptions.READ_COLUMNS)
+                .exclusive(MaxcomputeSourceOptions.TABLE_LIST, MaxcomputeSourceOptions.TABLE_NAME)
                 .build();
     }
 

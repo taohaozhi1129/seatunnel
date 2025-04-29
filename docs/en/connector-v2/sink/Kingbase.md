@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-jdbc.md';
+
 # Kingbase
 
 > JDBC Kingbase Sink Connector
@@ -83,7 +85,7 @@
 
 ## Task Example
 
-### Simple:
+### Simple
 
 > This example defines a SeaTunnel synchronization task that automatically generates data through FakeSource and sends
 > it to JDBC Sink. FakeSource generates a total of 16 rows of data (row.num=16), with each row having 12 fields. The final target table is test_table will also be 16 rows of data in the table.
@@ -130,7 +132,7 @@ source {
 
 transform {
   # If you would like to get more information about how to configure seatunnel and see full list of transform plugins,
-    # please go to https://seatunnel.apache.org/docs/category/transform-v2
+    # please go to https://seatunnel.apache.org/docs/transform-v2
 }
 
 sink {
@@ -166,3 +168,6 @@ sink {
 }
 ```
 
+## Changelog
+
+<ChangeLog />
