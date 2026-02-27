@@ -39,6 +39,7 @@ import org.apache.http.util.EntityUtils;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
+import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -75,7 +76,7 @@ import static org.apache.seatunnel.e2e.common.util.ContainerUtil.copyAllConnecto
 @AutoService(TestContainer.class)
 public class SeaTunnelContainer extends AbstractTestContainer {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    protected static final String JDK_DOCKER_IMAGE = "openjdk:8";
+    protected static final String JDK_DOCKER_IMAGE = "seatunnelhub/openjdk:8u342";
     private static final String CLIENT_SHELL = "seatunnel.sh";
     protected static final String SERVER_SHELL = "seatunnel-cluster.sh";
     protected static final String CONNECTOR_CHECK_SHELL = "seatunnel-connector.sh";
@@ -84,6 +85,7 @@ public class SeaTunnelContainer extends AbstractTestContainer {
 
     @Override
     public void startUp() throws Exception {
+        FileUtils.createNewDir(HOST_VOLUME_MOUNT_PATH);
         server = createSeaTunnelServer();
     }
 
@@ -114,6 +116,10 @@ public class SeaTunnelContainer extends AbstractTestContainer {
                                 new Slf4jLogConsumer(
                                         DockerLoggerFactory.getLogger(
                                                 "seatunnel-engine:" + JDK_DOCKER_IMAGE)))
+                        .withFileSystemBind(
+                                HOST_VOLUME_MOUNT_PATH,
+                                CONTAINER_VOLUME_MOUNT_PATH,
+                                BindMode.READ_WRITE)
                         .waitingFor(Wait.forLogMessage(".*received new worker register:.*", 1));
         copySeaTunnelStarterToContainer(server);
         server.setPortBindings(Arrays.asList("5801:5801", "8080:8080"));
@@ -213,8 +219,11 @@ public class SeaTunnelContainer extends AbstractTestContainer {
     @Override
     public void tearDown() throws Exception {
         if (server != null) {
+            // delete the volume
+            server.execInContainer("rm", "-rf", CONTAINER_VOLUME_MOUNT_PATH);
             server.close();
         }
+        FileUtils.deleteFile(HOST_VOLUME_MOUNT_PATH);
     }
 
     @Override
@@ -338,9 +347,9 @@ public class SeaTunnelContainer extends AbstractTestContainer {
             //            classLoaderObjectCheck(1);
             return result;
         } else {
-            // Waiting 10s for release thread
+            // Waiting 120s for release thread
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(120, TimeUnit.SECONDS)
                     .untilAsserted(
                             () -> {
                                 List<String> threads = ContainerUtil.getJVMThreadNames(server);
@@ -409,12 +418,15 @@ public class SeaTunnelContainer extends AbstractTestContainer {
                 || s.contains(
                         "org.apache.hadoop.fs.FileSystem$Statistics$StatisticsDataReferenceCleaner")
                 || s.startsWith("Log4j2-TF-")
+                || s.startsWith("heartbeat") // Add heartbeat threads as system threads
                 || aqsThread.matcher(s).matches()
                 // The renewed background thread of the hdfs client
                 || s.startsWith("LeaseRenewer")
                 // The read of hdfs which has the thread that is all in running status
                 || s.startsWith("org.apache.hadoop.hdfs.PeerCache")
-                || s.startsWith("java-sdk-progress-listener-callback-thread");
+                || s.startsWith("java-sdk-progress-listener-callback-thread")
+                // redis pool evictor daemon thread
+                || s.startsWith("commons-pool-evictor");
     }
 
     private void classLoaderObjectCheck(Integer maxSize) throws IOException, InterruptedException {
@@ -488,7 +500,10 @@ public class SeaTunnelContainer extends AbstractTestContainer {
                 // JNA Cleaner
                 || threadName.startsWith("JNA Cleaner")
                 // GRPC client
-                || threadName.startsWith("grpc");
+                || threadName.startsWith("grpc")
+                // Paimon
+                || threadName.startsWith("AsyncOutputStream")
+                || threadName.startsWith("MANIFEST-READ-THREAD-POOL");
     }
 
     @Override

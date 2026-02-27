@@ -19,6 +19,7 @@
 package org.apache.seatunnel.connectors.seatunnel.jdbc;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.Pair;
 
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -28,8 +29,6 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDiale
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.oracle.OracleDialect;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.source.JdbcSourceTable;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
-
-import org.apache.commons.lang3.tuple.Pair;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -172,6 +171,13 @@ public class JdbcOracleIT extends AbstractJdbcIT {
         Container.ExecResult execResult =
                 container.executeJob(
                         "/jdbc_oracle_source_to_sink_without_decimal_type_narrowing.conf");
+        Assertions.assertEquals(0, execResult.getExitCode());
+    }
+
+    @TestTemplate
+    public void testOracleWithBlobAsString(TestContainer container) throws Exception {
+        Container.ExecResult execResult =
+                container.executeJob("/jdbc_oracle_source_to_sink_with_blob_as_string.conf");
         Assertions.assertEquals(0, execResult.getExitCode());
     }
 

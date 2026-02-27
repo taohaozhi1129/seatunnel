@@ -17,10 +17,11 @@
 
 package org.apache.seatunnel.connectors.seatunnel.paimon.source.converter;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.common.utils.DateUtils;
 import org.apache.seatunnel.common.utils.TimeUtils;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.data.Decimal;
 import org.apache.paimon.data.Timestamp;
@@ -48,10 +49,13 @@ import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.GreaterThan;
 import net.sf.jsqlparser.expression.operators.relational.GreaterThanEquals;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.expression.operators.relational.LikeExpression;
 import net.sf.jsqlparser.expression.operators.relational.MinorThan;
 import net.sf.jsqlparser.expression.operators.relational.MinorThanEquals;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
@@ -63,10 +67,13 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.IntStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SqlToPaimonPredicateConverter {
 
@@ -115,12 +122,11 @@ public class SqlToPaimonPredicateConverter {
             }
         }
 
-        String[] columnNamesArray = columnNames.toArray(new String[0]);
         projectionIndex =
-                IntStream.range(0, columnNamesArray.length)
-                        .map(
-                                i -> {
-                                    String fieldName = columnNamesArray[i];
+                columnNames.stream()
+                        .mapToInt(
+                                columnName -> {
+                                    String fieldName = columnName.replace("`", "");
                                     int index = Arrays.asList(fieldNames).indexOf(fieldName);
                                     if (index == -1) {
                                         throw new IllegalArgumentException(
@@ -141,6 +147,28 @@ public class SqlToPaimonPredicateConverter {
         }
         PredicateBuilder builder = new PredicateBuilder(rowType);
         return parseExpressionToPredicate(builder, rowType, whereExpression);
+    }
+
+    public static Map<String, String> parseDynamicOptions(String sql) {
+        Map<String, String> dynamicOptions = new HashMap<>();
+        if (StringUtils.isBlank(sql)) {
+            return dynamicOptions;
+        }
+        String dynamicOptionsPattern = "/\\*\\+ OPTIONS\\((.*?)\\) \\*/";
+        Pattern optionsPattern = Pattern.compile(dynamicOptionsPattern, Pattern.CASE_INSENSITIVE);
+        Matcher optionsMatcher = optionsPattern.matcher(sql);
+        if (optionsMatcher.find()) {
+            String optionsContent = optionsMatcher.group(1).trim();
+
+            Pattern kvPattern = Pattern.compile("'\\s*(.*?)\\s*'\\s*=\\s*'\\s*(.*?)\\s*'");
+            Matcher kvMatcher = kvPattern.matcher(optionsContent);
+            while (kvMatcher.find()) {
+                String key = kvMatcher.group(1).trim();
+                String value = kvMatcher.group(2).trim();
+                dynamicOptions.put(key, value);
+            }
+        }
+        return dynamicOptions;
     }
 
     private static Predicate parseExpressionToPredicate(
@@ -239,19 +267,98 @@ public class SqlToPaimonPredicateConverter {
             Object paimonEndVal =
                     convertValueByPaimonDataType(rowType, column.getColumnName(), jsqlEndVal);
             return builder.between(columnIndex, paimonStartVal, paimonEndVal);
+        } else if (expression instanceof LikeExpression) {
+            LikeExpression like = (LikeExpression) expression;
+            Column column = (Column) like.getLeftExpression();
+            int columnIndex = getColumnIndex(builder, column);
+            Object rightPredicate = getJSQLParserDataTypeValue(like.getRightExpression());
+            Object rightVal =
+                    convertValueByPaimonDataType(rowType, column.getColumnName(), rightPredicate);
+
+            Pattern BEGIN_PATTERN = Pattern.compile("([^%]+)%$");
+            Matcher beginMatcher = BEGIN_PATTERN.matcher(rightVal.toString());
+            if (beginMatcher.matches()) {
+                return builder.startsWith(
+                        columnIndex, BinaryString.fromString(beginMatcher.group(1)));
+            }
+
+            Pattern END_PATTERN = Pattern.compile("^%([^%]+)");
+            Matcher endMatcher = END_PATTERN.matcher(rightVal.toString());
+            if (endMatcher.matches()) {
+                return builder.endsWith(columnIndex, BinaryString.fromString(endMatcher.group(1)));
+            }
+
+            Pattern CONTAINS_PATTERN = Pattern.compile("^%([^%]+)%$");
+            Matcher containsMatcher = CONTAINS_PATTERN.matcher(rightVal.toString());
+            if (containsMatcher.matches()) {
+                return builder.contains(
+                        columnIndex, BinaryString.fromString(containsMatcher.group(1)));
+            }
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Invalid LIKE pattern: '%s'. Supported patterns are: 'prefix%%', '%%suffix', and '%%substring%%'. "
+                                    + "Please ensure your pattern matches one of these formats.",
+                            rightVal.toString()));
+
         } else if (expression instanceof Parenthesis) {
             Parenthesis parenthesis = (Parenthesis) expression;
             return parseExpressionToPredicate(builder, rowType, parenthesis.getExpression());
+        } else if (expression instanceof InExpression) {
+            return handleInExpression(builder, rowType, (InExpression) expression);
         }
         throw new IllegalArgumentException(
                 "Unsupported expression type: " + expression.getClass().getSimpleName());
+    }
+
+    private static Predicate handleInExpression(
+            PredicateBuilder builder, RowType rowType, InExpression expr) {
+        Expression left = expr.getLeftExpression();
+        Column column = safeGetColumn(left);
+        int index = getColumnIndex(builder, column);
+
+        Expression right = expr.getRightExpression();
+        if (!(right instanceof ParenthesedExpressionList)) {
+            throw new IllegalArgumentException(
+                    "Unsupported right expression in IN: expected a parenthesized expression list");
+        }
+
+        ParenthesedExpressionList list = (ParenthesedExpressionList) right;
+        List<Expression> expressions = list.getExpressions();
+        if (expressions.isEmpty()) {
+            throw new IllegalArgumentException("Empty value list in IN clause is not allowed");
+        }
+
+        List<Object> values = new ArrayList<>(expressions.size());
+        for (Expression expression : expressions) {
+            Object rawVal = getJSQLParserDataTypeValue(expression);
+            if (rawVal == null) {
+                throw new IllegalArgumentException("Null value found in IN clause values");
+            }
+            Object convertedVal =
+                    convertValueByPaimonDataType(rowType, column.getColumnName(), rawVal);
+            if (convertedVal == null) {
+                throw new IllegalArgumentException(
+                        "Failed to convert value in IN clause: " + rawVal);
+            }
+            values.add(convertedVal);
+        }
+
+        return expr.isNot() ? builder.notIn(index, values) : builder.in(index, values);
+    }
+
+    private static Column safeGetColumn(Expression expr) {
+        if (!(expr instanceof Column)) {
+            throw new IllegalArgumentException(
+                    "Expected Column expression, but got: " + expr.getClass().getSimpleName());
+        }
+        return (Column) expr;
     }
 
     private static Object convertValueByPaimonDataType(
             RowType rowType, String columnName, Object jsqlParserDataTypeValue) {
         Optional<DataField> theFiled =
                 rowType.getFields().stream()
-                        .filter(field -> field.name().equalsIgnoreCase(columnName))
+                        .filter(field -> field.name().equalsIgnoreCase(columnName.replace("`", "")))
                         .findFirst();
         String strValue = jsqlParserDataTypeValue.toString();
         if (theFiled.isPresent()) {
@@ -315,7 +422,7 @@ public class SqlToPaimonPredicateConverter {
     }
 
     private static int getColumnIndex(PredicateBuilder builder, Column column) {
-        int index = builder.indexOf(column.getColumnName());
+        int index = builder.indexOf(column.getColumnName().replace("`", ""));
         if (index == -1) {
             throw new IllegalArgumentException(
                     String.format("The column named [%s] is not exists", column.getColumnName()));

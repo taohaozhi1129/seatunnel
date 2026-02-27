@@ -18,14 +18,14 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.Pair;
+
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.e2e.common.TestResource;
 import org.apache.seatunnel.e2e.common.TestSuiteBase;
 import org.apache.seatunnel.e2e.common.container.ContainerExtendedFactory;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
-
-import org.apache.commons.lang3.tuple.Pair;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -62,7 +62,7 @@ import java.util.stream.Stream;
 
 @Slf4j
 public class JdbcMysqlMultipleTablesIT extends TestSuiteBase implements TestResource {
-    private static final String MYSQL_IMAGE = "mysql:8.0";
+    private static final String MYSQL_IMAGE = "mysql:8.0.43";
     private static final String MYSQL_CONTAINER_HOST = "mysql-e2e";
     private static final String MYSQL_DATABASE = "seatunnel";
     private static final String MYSQL_USERNAME = "root";
@@ -87,7 +87,7 @@ public class JdbcMysqlMultipleTablesIT extends TestSuiteBase implements TestReso
                     + "    `c_bit_16`               bit(16)               DEFAULT NULL,\n"
                     + "    `c_bit_32`               bit(32)               DEFAULT NULL,\n"
                     + "    `c_bit_64`               bit(64)               DEFAULT NULL,\n"
-                    + "    `c_boolean`              tinyint(1)            DEFAULT NULL,\n"
+                    + "    `c_tinyint_1`              tinyint(1)            DEFAULT NULL,\n"
                     + "    `c_tinyint`              tinyint(4)            DEFAULT NULL,\n"
                     + "    `c_tinyint_unsigned`     tinyint(3) unsigned   DEFAULT NULL,\n"
                     + "    `c_smallint`             smallint(6)           DEFAULT NULL,\n"
@@ -204,6 +204,36 @@ public class JdbcMysqlMultipleTablesIT extends TestSuiteBase implements TestReso
                 0, sqlConfEexecResult.getExitCode(), sqlConfEexecResult.getStderr());
     }
 
+    @TestTemplate
+    public void testMysqlJdbcRegexPatternE2e(TestContainer container)
+            throws IOException, InterruptedException, SQLException {
+        clearSinkTables();
+
+        Container.ExecResult execResult =
+                container.executeJob("/jdbc_mysql_source_and_sink_with_pattern_tables.conf");
+        Assertions.assertEquals(0, execResult.getExitCode(), execResult.getStderr());
+
+        List<Executable> asserts =
+                TABLES.stream()
+                        .map(
+                                (Function<String, Executable>)
+                                        table ->
+                                                () ->
+                                                        Assertions.assertIterableEquals(
+                                                                query(
+                                                                        String.format(
+                                                                                "SELECT * FROM %s.%s",
+                                                                                SOURCE_DATABASE,
+                                                                                table)),
+                                                                query(
+                                                                        String.format(
+                                                                                "SELECT * FROM %s.%s",
+                                                                                SINK_DATABASE,
+                                                                                table))))
+                        .collect(Collectors.toList());
+        Assertions.assertAll(asserts);
+    }
+
     @AfterAll
     @Override
     public void tearDown() throws Exception {
@@ -305,7 +335,7 @@ public class JdbcMysqlMultipleTablesIT extends TestSuiteBase implements TestReso
                     "c_bit_16",
                     "c_bit_32",
                     "c_bit_64",
-                    "c_boolean",
+                    "c_tinyint_1",
                     "c_tinyint",
                     "c_tinyint_unsigned",
                     "c_smallint",

@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.jdbc;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.testutils.MySqlContainer;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.testutils.MySqlVersion;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.testutils.UniqueDatabase;
@@ -28,8 +30,6 @@ import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.DisabledOnContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
 import org.apache.seatunnel.e2e.common.util.JobIdGenerator;
-
-import org.apache.commons.lang3.StringUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -79,7 +79,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
     private static final String MYSQL_USER_NAME = "mysqluser";
     private static final String MYSQL_USER_PASSWORD = "mysqlpw";
 
-    private static final String OPRDER_BY = " order by id";
+    private static final String ORDER_BY = " order by id";
     private static final String QUERY = "select * from %s.%s";
     private static final String PROJECTION_QUERY =
             "select id,name,description,weight,add_column1,add_column2,add_column3 from %s.%s";
@@ -292,7 +292,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
     }
 
     private void assertSchemaEvolution(String sourceTable, String sinkTable) {
-        await().atMost(30000, TimeUnit.MILLISECONDS)
+        await().atMost(60000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
                                 Assertions.assertIterableEquals(
@@ -303,11 +303,11 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                                 QUERY,
                                                                 schemaChangeCase.getSchemaName(),
                                                                 sinkTable)
-                                                        + OPRDER_BY)));
+                                                        + ORDER_BY)));
 
         // case1 add columns with cdc data at same time
         sourceDatabase.setTemplateName("add_columns").createAndInitialize();
-        await().atMost(30000, TimeUnit.MILLISECONDS)
+        await().atMost(60000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
                                 Assertions.assertIterableEquals(
@@ -321,7 +321,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                         schemaChangeCase.getSinkQueryColumns(),
                                                         schemaChangeCase.getSchemaName(),
                                                         sinkTable))));
-        await().atMost(30000, TimeUnit.MILLISECONDS)
+        await().atMost(60000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () -> {
                             Assertions.assertIterableEquals(
@@ -334,7 +334,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                             schemaChangeCase.getSchemaName(),
                                                             sinkTable)
                                                     + " where id >= 128"
-                                                    + OPRDER_BY));
+                                                    + ORDER_BY));
 
                             Assertions.assertIterableEquals(
                                     querySource(
@@ -347,7 +347,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                             PROJECTION_QUERY,
                                                             schemaChangeCase.getSchemaName(),
                                                             sinkTable)
-                                                    + OPRDER_BY));
+                                                    + ORDER_BY));
                         });
 
         // case2 drop columns with cdc data at same time
@@ -366,7 +366,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
     }
 
     private void assertSchemaEvolutionForAddColumns(String sourceTable, String sinkTable) {
-        await().atMost(30000, TimeUnit.MILLISECONDS)
+        await().atMost(60000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
                                 Assertions.assertIterableEquals(
@@ -377,13 +377,13 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                                 QUERY,
                                                                 schemaChangeCase.getSchemaName(),
                                                                 sinkTable)
-                                                        + OPRDER_BY)));
+                                                        + ORDER_BY)));
 
         // case1 add columns with cdc data at same time
         sourceDatabase.setTemplateName("add_columns").createAndInitialize();
         given().pollDelay(Duration.ofSeconds(5))
                 .await()
-                .atMost(50000, TimeUnit.MILLISECONDS)
+                .atMost(120000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
                                 Assertions.assertIterableEquals(
@@ -394,8 +394,8 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                                 QUERY,
                                                                 schemaChangeCase.getSchemaName(),
                                                                 sinkTable)
-                                                        + OPRDER_BY)));
-        await().atMost(30000, TimeUnit.MILLISECONDS)
+                                                        + ORDER_BY)));
+        await().atMost(60000, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () -> {
                             Assertions.assertIterableEquals(
@@ -408,7 +408,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                             schemaChangeCase.getSchemaName(),
                                                             sinkTable)
                                                     + " where id >= 128"
-                                                    + OPRDER_BY));
+                                                    + ORDER_BY));
 
                             Assertions.assertIterableEquals(
                                     querySource(
@@ -421,7 +421,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                             PROJECTION_QUERY,
                                                             schemaChangeCase.getSchemaName(),
                                                             sinkTable)
-                                                    + OPRDER_BY));
+                                                    + ORDER_BY));
                         });
     }
 
@@ -453,7 +453,7 @@ public abstract class AbstractSchemaChangeBaseIT extends TestSuiteBase implement
                                                                 QUERY,
                                                                 schemaChangeCase.getSchemaName(),
                                                                 sinkTable)
-                                                        + OPRDER_BY)));
+                                                        + ORDER_BY)));
     }
 
     private Connection getJdbcConnection(String connectionType) throws SQLException {

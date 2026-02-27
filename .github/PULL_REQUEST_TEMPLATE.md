@@ -43,10 +43,10 @@ If you are adding E2E test cases, maybe refer to https://github.com/apache/seatu
 * [ ] If any new Jar binary package adding in your PR, please add License Notice according
   [New License Guide](https://github.com/apache/seatunnel/blob/dev/docs/en/contribution/new-license.md)
 * [ ] If necessary, please update the documentation to describe the new feature. https://github.com/apache/seatunnel/tree/dev/docs
+* [ ] If necessary, please update `incompatible-changes.md` to describe the incompatibility caused by this PR.
 * [ ] If you are contributing the connector code, please check that the following files are updated:
   1. Update [plugin-mapping.properties](https://github.com/apache/seatunnel/blob/dev/plugin-mapping.properties) and add new connector information in it
   2. Update the pom file of [seatunnel-dist](https://github.com/apache/seatunnel/blob/dev/seatunnel-dist/pom.xml)
   3. Add ci label in [label-scope-conf](https://github.com/apache/seatunnel/blob/dev/.github/workflows/labeler/label-scope-conf.yml)
   4. Add e2e testcase in [seatunnel-e2e](https://github.com/apache/seatunnel/tree/dev/seatunnel-e2e/seatunnel-connector-v2-e2e/)
   5. Update connector [plugin_config](https://github.com/apache/seatunnel/blob/dev/config/plugin_config)
-* [ ] Update the [`release-note`](https://github.com/apache/seatunnel/blob/dev/release-note.md).

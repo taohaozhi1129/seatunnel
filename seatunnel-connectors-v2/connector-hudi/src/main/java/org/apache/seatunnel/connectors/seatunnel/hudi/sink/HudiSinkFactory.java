@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.hudi.sink;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.options.SinkConnectorCommonOptions;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -29,8 +31,6 @@ import org.apache.seatunnel.connectors.seatunnel.hudi.config.HudiSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.hudi.config.HudiSinkOptions;
 import org.apache.seatunnel.connectors.seatunnel.hudi.config.HudiTableConfig;
 import org.apache.seatunnel.connectors.seatunnel.hudi.exception.HudiConnectorException;
-
-import org.apache.commons.lang3.StringUtils;
 
 import com.google.auto.service.AutoService;
 
@@ -115,6 +115,11 @@ public class HudiSinkFactory implements TableSinkFactory {
                 .put(
                         HudiSinkOptions.CDC_ENABLED.key(),
                         String.valueOf(hudiTableConfig.isCdcEnabled()));
+
+        catalogTable
+                .getOptions()
+                .put(HudiSinkOptions.PRECOMBINE_FIELD.key(), hudiTableConfig.getPreCombineField());
+
         catalogTable =
                 CatalogTable.of(
                         newTableId,

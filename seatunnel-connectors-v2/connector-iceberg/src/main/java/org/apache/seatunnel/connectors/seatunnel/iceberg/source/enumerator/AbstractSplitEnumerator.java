@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.iceberg.source.enumerator;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.Pair;
+
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -24,7 +26,6 @@ import org.apache.seatunnel.connectors.seatunnel.iceberg.IcebergCatalogLoader;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.config.IcebergSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.source.split.IcebergFileScanTaskSplit;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
@@ -131,16 +132,14 @@ public abstract class AbstractSplitEnumerator
     @Override
     public void addSplitsBack(List<IcebergFileScanTaskSplit> splits, int subtaskId) {
         if (!splits.isEmpty()) {
-            synchronized (stateLock) {
-                addPendingSplits(splits);
-                if (context.registeredReaders().contains(subtaskId)) {
-                    assignPendingSplits(Collections.singleton(subtaskId));
-                } else {
-                    log.warn(
-                            "Reader {} is not registered. Pending splits {} are not assigned.",
-                            subtaskId,
-                            splits);
-                }
+            addPendingSplits(splits);
+            if (context.registeredReaders().contains(subtaskId)) {
+                assignPendingSplits(Collections.singleton(subtaskId));
+            } else {
+                log.warn(
+                        "Reader {} is not registered. Pending splits {} are not assigned.",
+                        subtaskId,
+                        splits);
             }
         }
         log.info("Add back splits {} to JdbcSourceSplitEnumerator.", splits.size());
@@ -163,9 +162,7 @@ public abstract class AbstractSplitEnumerator
     @Override
     public void registerReader(int subtaskId) {
         log.debug("Adding reader {} to IcebergSourceEnumerator.", subtaskId);
-        synchronized (stateLock) {
-            assignPendingSplits(Collections.singleton(subtaskId));
-        }
+        assignPendingSplits(Collections.singleton(subtaskId));
     }
 
     @Override

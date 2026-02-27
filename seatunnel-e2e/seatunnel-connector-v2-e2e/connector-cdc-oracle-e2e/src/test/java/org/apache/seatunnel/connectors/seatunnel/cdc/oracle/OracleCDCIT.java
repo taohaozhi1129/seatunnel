@@ -24,6 +24,7 @@ import org.apache.seatunnel.e2e.common.container.EngineType;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.DisabledOnContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
+import org.apache.seatunnel.e2e.common.util.JdbcUtil;
 import org.apache.seatunnel.e2e.common.util.JobIdGenerator;
 
 import org.junit.jupiter.api.AfterAll;
@@ -38,10 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -136,6 +135,40 @@ public class OracleCDCIT extends AbstractOracleCDCIT implements TestResource {
     @TestTemplate
     public void testOracleCdcCheckDataE2e(TestContainer container) throws Exception {
         checkDataForTheJob(container, "/oraclecdc_to_oracle.conf", false);
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason =
+                    "Heartbeat action query is currently only supported by the zeta engine.")
+    public void testOracleCdcCheckDataE2eWithHeartbeat(TestContainer container) throws Exception {
+        String createHeartbeatTable =
+                "BEGIN "
+                        + "   EXECUTE IMMEDIATE 'CREATE TABLE "
+                        + SCEHMA_NAME
+                        + ".heartbeat ("
+                        + "       ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                        + "   )'; "
+                        + "EXCEPTION "
+                        + "   WHEN OTHERS THEN "
+                        + "      IF SQLCODE != -955 THEN "
+                        + "         RAISE; "
+                        + "      END IF; "
+                        + "END;";
+        executeSql(createHeartbeatTable);
+        clearTable(SCEHMA_NAME, "heartbeat");
+
+        checkDataForTheJob(container, "/oraclecdc_to_oracle_with_heartbeat.conf", false);
+
+        await().atMost(10000, TimeUnit.MILLISECONDS)
+                .untilAsserted(
+                        () -> {
+                            List<List<Object>> query =
+                                    querySql("SELECT * FROM " + SCEHMA_NAME + ".heartbeat");
+                            Assertions.assertFalse(query.isEmpty());
+                        });
     }
 
     @TestTemplate
@@ -565,22 +598,15 @@ public class OracleCDCIT extends AbstractOracleCDCIT implements TestResource {
     }
 
     private List<List<Object>> querySql(String sql) {
-        try (Connection connection = getJdbcConnection(ORACLE_CONTAINER);
-                Statement statement = connection.createStatement()) {
-            ResultSet resultSet = statement.executeQuery(sql);
-            List<List<Object>> result = new ArrayList<>();
-            int columnCount = resultSet.getMetaData().getColumnCount();
-            while (resultSet.next()) {
-                ArrayList<Object> objects = new ArrayList<>();
-                for (int i = 1; i <= columnCount; i++) {
-                    objects.add(resultSet.getObject(i));
-                }
-                result.add(objects);
-            }
-            return result;
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+        return JdbcUtil.querySql(
+                sql,
+                () -> {
+                    try {
+                        return getJdbcConnection(ORACLE_CONTAINER);
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
     }
 
     private void executeSql(String sql) {

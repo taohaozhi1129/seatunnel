@@ -20,6 +20,8 @@ package org.apache.seatunnel.connectors.seatunnel.tdengine.sink;
 import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 import org.apache.seatunnel.shade.com.google.common.base.Throwables;
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.ArrayUtils;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -28,9 +30,6 @@ import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
 import org.apache.seatunnel.connectors.seatunnel.tdengine.config.TDengineSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.tdengine.exception.TDengineConnectorException;
-
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -103,10 +102,13 @@ public class TDengineSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
                 conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
             String sql =
                     String.format(
-                            "INSERT INTO %s using %s tags ( %s ) VALUES ( %s );",
+                            "INSERT INTO %s using %s tags ( %s ) %s VALUES ( %s );",
                             element.getField(0),
                             config.getStable(),
                             tagValues,
+                            StringUtils.isEmpty(config.getWriteColumns())
+                                    ? ""
+                                    : "( " + config.getWriteColumns() + " )",
                             StringUtils.join(convertDataType(metrics), ","));
             final int rowCount = statement.executeUpdate(sql);
             if (rowCount == 0) {
@@ -140,6 +142,7 @@ public class TDengineSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
                             if (object == null) {
                                 return null;
                             }
+
                             if (LocalDateTime.class.equals(object.getClass())) {
                                 // transform timezone according to the config
                                 return "'"

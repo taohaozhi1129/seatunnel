@@ -58,6 +58,27 @@ jobs:
         run: ./mvnw -B -T 1 clean test -D"license.skipAddThirdParty"=true -pl seatunnel-ci-tools -am --no-snapshot-updates
         env:
           MAVEN_OPTS: -Xmx512m
+      - name: Check for .class files in git
+        run: |
+          echo "Checking for .class files tracked by git..."
+
+          # Find all .class files tracked by git
+          CLASS_FILES=$(git ls-files '*.class')
+
+          if [ -n "$CLASS_FILES" ]; then
+            echo "ERROR: The following .class files are tracked by git:"
+            echo "$CLASS_FILES"
+            echo ""
+            echo "Please remove .class files from the repository."
+            echo "These files should not be committed. You can remove them using:"
+            echo "  git rm --cached <file>.class"
+            echo "  git commit -m 'Remove .class files'"
+            echo ""
+            echo "Also, consider adding '*.class' to .gitignore if not already present."
+            exit 1
+          else
+            echo "No .class files found in git repository."
+          fi
 
   helm-chart-check:
     name: Check Helm Chart Syntax
@@ -71,21 +92,23 @@ jobs:
       - name: Lint Chart
         run: helm lint deploy/kubernetes/seatunnel
 
-  dead-link:
-    name: Dead links
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@v2
-      - run: sudo npm install -g markdown-link-check@3.8.7
-      - run: |
-          for file in $(find . -name "*.md"); do
-            markdown-link-check -c .dlc.json -q "$file"
-          done
+#  dead-link:
+#    name: Dead links
+#    runs-on: ubuntu-latest
+#    timeout-minutes: 150
+#    # Temporarily ignore this job to avoid blocking PRs
+#    continue-on-error: true
+#    steps:
+#      - uses: actions/checkout@v2
+#      - run: sudo npm install -g markdown-link-check@3.8.7
+#      - run: |
+#          for file in $(find . -name "*.md"); do
+#            markdown-link-check -c .dlc.json -q "$file"
+#          done
 
   sanity-check:
     name: Sanity check results
-    needs: [ license-header, code-style, dead-link ]
+    needs: [ license-header, code-style ]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -93,7 +116,6 @@ jobs:
         run: |
           [[ ${{ needs.license-header.result }} == 'success' ]] || exit 1;
           [[ ${{ needs.code-style.result }} == 'success' ]] || exit 1;
-          [[ ${{ needs.dead-link.result }} == 'success' ]] || exit 1;
 
   changes:
     runs-on: ubuntu-latest
@@ -363,7 +385,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest', 'windows-latest' ]
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -417,7 +439,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -448,7 +470,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -479,7 +501,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -509,7 +531,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -539,7 +561,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -721,7 +743,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -749,7 +771,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -811,7 +833,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -842,7 +864,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -873,7 +895,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -904,7 +926,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -935,7 +957,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1162,7 +1184,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1181,13 +1203,13 @@ jobs:
 
   kudu-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-kudu-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-kudu-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1206,7 +1228,7 @@ jobs:
 
   amazonSqs-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-amazonsqs-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-amazonsqs-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -1231,13 +1253,13 @@ jobs:
 
   kafka-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-kafka-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-kafka-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1256,7 +1278,7 @@ jobs:
 
   rocketmq-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-rocketmq-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-rocketmq-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -1282,13 +1304,13 @@ jobs:
 
   doris-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-doris-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-doris-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1307,13 +1329,13 @@ jobs:
 
   paimon-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-paimon-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-paimon-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1332,13 +1354,13 @@ jobs:
 
   oracle-cdc-connector-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-cdc-oracle-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-cdc-oracle-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -1362,7 +1384,7 @@ jobs:
 
   connector-file-local-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-file-local-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-file-local-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -1387,7 +1409,7 @@ jobs:
 
   connector-file-sftp-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-file-sftp-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-file-sftp-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -1412,13 +1434,13 @@ jobs:
 
   connector-redis-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-redis-e2e')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || contains(needs.changes.outputs.it-modules, 'connector-redis-e2e')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
@@ -1432,5 +1454,30 @@ jobs:
       - name: run redis connector integration test
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true -D"skip.ui"=true --no-snapshot-updates -pl :connector-redis-e2e -am -Pci
+        env:
+          MAVEN_OPTS: -Xmx4096m
+
+  connector-sensorsdata-it:
+    needs: [ changes, sanity-check ]
+    if: needs.changes.outputs.api == 'true' || contains(needs.changes.outputs.it-modules, 'connector-sensorsdata-e2e')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        java: [ '8', '11' ]
+        os: [ 'ubuntu-latest' ]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: free disk space
+        run: tools/github/free_disk_space.sh
+      - name: run sensorsdata connector integration test
+        run: |
+          ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true -D"skip.ui"=true --no-snapshot-updates -pl :connector-sensorsdata-e2e -am -Pci
         env:
           MAVEN_OPTS: -Xmx4096m

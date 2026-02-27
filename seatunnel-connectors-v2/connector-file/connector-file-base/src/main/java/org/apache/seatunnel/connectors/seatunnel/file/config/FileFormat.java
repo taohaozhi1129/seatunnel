@@ -19,9 +19,12 @@ package org.apache.seatunnel.connectors.seatunnel.file.config;
 
 import org.apache.seatunnel.connectors.seatunnel.file.sink.config.FileSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.BinaryWriteStrategy;
+import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.CanalJsonWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.CsvWriteStrategy;
+import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.DebeziumJsonWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.ExcelWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.JsonWriteStrategy;
+import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.MaxWellJsonWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.OrcWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.ParquetWriteStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.sink.writer.TextWriteStrategy;
@@ -31,20 +34,23 @@ import org.apache.seatunnel.connectors.seatunnel.file.source.reader.BinaryReadSt
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.CsvReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.ExcelReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.JsonReadStrategy;
+import org.apache.seatunnel.connectors.seatunnel.file.source.reader.MarkdownReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.OrcReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.ParquetReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.ReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.TextReadStrategy;
 import org.apache.seatunnel.connectors.seatunnel.file.source.reader.XmlReadStrategy;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.Serializable;
 import java.util.Arrays;
 
+@Slf4j
 public enum FileFormat implements Serializable {
     CSV("csv") {
         @Override
         public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
-            fileSinkConfig.setFieldDelimiter(",");
             return new CsvWriteStrategy(fileSinkConfig);
         }
 
@@ -129,7 +135,56 @@ public enum FileFormat implements Serializable {
         public ReadStrategy getReadStrategy() {
             return new BinaryReadStrategy();
         }
-    };
+    },
+    CANAL_JSON("canal_json") {
+        @Override
+        public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
+            return new CanalJsonWriteStrategy(fileSinkConfig);
+        }
+
+        @Override
+        public ReadStrategy getReadStrategy() {
+            throw new UnsupportedOperationException(
+                    "File format 'canal_json' does not support reading.");
+        }
+    },
+    DEBEZIUM_JSON("debezium_json") {
+        @Override
+        public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
+            return new DebeziumJsonWriteStrategy(fileSinkConfig);
+        }
+
+        @Override
+        public ReadStrategy getReadStrategy() {
+            throw new UnsupportedOperationException(
+                    "File format 'debezium_json' does not support reading.");
+        }
+    },
+    MAXWELL_JSON("maxwell_json") {
+        @Override
+        public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
+            return new MaxWellJsonWriteStrategy(fileSinkConfig);
+        }
+
+        @Override
+        public ReadStrategy getReadStrategy() {
+            throw new UnsupportedOperationException(
+                    "File format 'maxwell_json' does not support reading.");
+        }
+    },
+    MARKDOWN("md", "markdown") {
+        @Override
+        public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
+            throw new UnsupportedOperationException(
+                    "File format 'markdown' does not support writing.");
+        }
+
+        @Override
+        public ReadStrategy getReadStrategy() {
+            return new MarkdownReadStrategy();
+        }
+    },
+    ;
 
     private final String[] suffix;
 
@@ -154,5 +209,18 @@ public enum FileFormat implements Serializable {
 
     public WriteStrategy getWriteStrategy(FileSinkConfig fileSinkConfig) {
         return null;
+    }
+
+    public boolean supportFileSplit() {
+        switch (this) {
+            case CSV:
+            case TEXT:
+            case JSON:
+            case PARQUET:
+                return true;
+            default:
+                log.info("The {} file type does not support file split", this);
+                return false;
+        }
     }
 }

@@ -18,6 +18,8 @@
 package org.apache.seatunnel.connectors.seatunnel.file.source.reader;
 
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.ArrayUtils;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.common.SeaTunnelAPIErrorCode;
 import org.apache.seatunnel.api.configuration.Option;
@@ -37,10 +39,9 @@ import org.apache.seatunnel.connectors.seatunnel.file.config.FileFormat;
 import org.apache.seatunnel.connectors.seatunnel.file.config.HadoopConf;
 import org.apache.seatunnel.connectors.seatunnel.file.exception.FileConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.file.exception.FileConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.file.source.split.FileSourceSplit;
 
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 
 import org.dom4j.Document;
 import org.dom4j.DocumentException;
@@ -91,13 +92,13 @@ public class XmlReadStrategy extends AbstractReadStrategy {
     public void read(String path, String tableId, Collector<SeaTunnelRow> output)
             throws IOException, FileConnectorException {
         Map<String, String> partitionsMap = parsePartitionsByPath(path);
-        resolveArchiveCompressedInputStream(path, tableId, output, partitionsMap, FileFormat.XML);
+        resolveArchiveCompressedInputStream(
+                new FileSourceSplit(tableId, path), output, partitionsMap, FileFormat.XML);
     }
 
     @Override
     public void readProcess(
-            String path,
-            String tableId,
+            FileSourceSplit split,
             Collector<SeaTunnelRow> output,
             InputStream inputStream,
             Map<String, String> partitionsMap,
@@ -109,7 +110,9 @@ public class XmlReadStrategy extends AbstractReadStrategy {
             document = saxReader.read(new InputStreamReader(inputStream, encoding));
         } catch (DocumentException e) {
             throw new FileConnectorException(
-                    FileConnectorErrorCode.FILE_READ_FAILED, "Failed to read xml file: " + path, e);
+                    FileConnectorErrorCode.FILE_READ_FAILED,
+                    "Failed to read xml file: " + split.getFilePath(),
+                    e);
         }
         Element rootElement = document.getRootElement();
 
@@ -161,7 +164,7 @@ public class XmlReadStrategy extends AbstractReadStrategy {
                                 }
                             }
 
-                            seaTunnelRow.setTableId(tableId);
+                            seaTunnelRow.setTableId(split.getTableId());
                             output.collect(seaTunnelRow);
                         });
     }
@@ -183,9 +186,10 @@ public class XmlReadStrategy extends AbstractReadStrategy {
                     "Schema information is undefined or misconfigured, please check your configuration file.");
         }
 
+        String partitionPath = getPathForPartitionInference(null);
         if (readColumns.isEmpty()) {
             this.seaTunnelRowType = rowType;
-            this.seaTunnelRowTypeWithPartition = mergePartitionTypes(fileNames.get(0), rowType);
+            this.seaTunnelRowTypeWithPartition = mergePartitionTypes(partitionPath, rowType);
         } else {
             if (readColumns.retainAll(Arrays.asList(rowType.getFieldNames()))) {
                 log.warn(
@@ -202,7 +206,7 @@ public class XmlReadStrategy extends AbstractReadStrategy {
             }
             this.seaTunnelRowType = new SeaTunnelRowType(fields, types);
             this.seaTunnelRowTypeWithPartition =
-                    mergePartitionTypes(fileNames.get(0), this.seaTunnelRowType);
+                    mergePartitionTypes(partitionPath, this.seaTunnelRowType);
         }
     }
 
@@ -282,13 +286,14 @@ public class XmlReadStrategy extends AbstractReadStrategy {
 
         this.dateFormat =
                 getComplexDateConfigValue(
-                        FileBaseSourceOptions.DATE_FORMAT, DateUtils.Formatter::parse);
+                        FileBaseSourceOptions.DATE_FORMAT_LEGACY, DateUtils.Formatter::parse);
         this.timeFormat =
                 getComplexDateConfigValue(
-                        FileBaseSourceOptions.TIME_FORMAT, TimeUtils.Formatter::parse);
+                        FileBaseSourceOptions.TIME_FORMAT_LEGACY, TimeUtils.Formatter::parse);
         this.datetimeFormat =
                 getComplexDateConfigValue(
-                        FileBaseSourceOptions.DATETIME_FORMAT, DateTimeUtils.Formatter::parse);
+                        FileBaseSourceOptions.DATETIME_FORMAT_LEGACY,
+                        DateTimeUtils.Formatter::parse);
         this.encoding =
                 ReadonlyConfig.fromConfig(pluginConfig)
                         .getOptional(FileBaseSourceOptions.ENCODING)

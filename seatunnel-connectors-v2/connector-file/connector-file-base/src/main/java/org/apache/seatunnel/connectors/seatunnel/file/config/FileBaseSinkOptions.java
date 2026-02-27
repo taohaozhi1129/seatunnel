@@ -21,9 +21,7 @@ import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.api.sink.DataSaveMode;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
-import org.apache.seatunnel.common.utils.DateTimeUtils;
 import org.apache.seatunnel.common.utils.DateUtils;
-import org.apache.seatunnel.common.utils.TimeUtils;
 import org.apache.seatunnel.format.csv.constant.CsvStringQuoteMode;
 import org.apache.seatunnel.format.text.constant.TextFormatConstant;
 
@@ -97,24 +95,6 @@ public class FileBaseSinkOptions extends FileBaseOptions {
                     .defaultValue(CompressFormat.NONE)
                     .withDescription("Orc file supported compression");
 
-    public static final Option<DateUtils.Formatter> DATE_FORMAT =
-            Options.key("date_format")
-                    .enumType(DateUtils.Formatter.class)
-                    .defaultValue(DateUtils.Formatter.YYYY_MM_DD)
-                    .withDescription("Date format");
-
-    public static final Option<DateTimeUtils.Formatter> DATETIME_FORMAT =
-            Options.key("datetime_format")
-                    .enumType(DateTimeUtils.Formatter.class)
-                    .defaultValue(DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS)
-                    .withDescription("Datetime format");
-
-    public static final Option<TimeUtils.Formatter> TIME_FORMAT =
-            Options.key("time_format")
-                    .enumType(TimeUtils.Formatter.class)
-                    .defaultValue(TimeUtils.Formatter.HH_MM_SS)
-                    .withDescription("Time format");
-
     public static final Option<String> FILE_PATH =
             Options.key("path")
                     .stringType()
@@ -127,6 +107,12 @@ public class FileBaseSinkOptions extends FileBaseOptions {
                     .defaultValue(DEFAULT_FIELD_DELIMITER)
                     .withDescription(
                             "The separator between columns in a row of data. Only needed by `text` and `csv` file format");
+
+    public static final Option<Integer> SHEET_MAX_ROWS =
+            Options.key("sheet_max_rows")
+                    .intType()
+                    .defaultValue(1048576)
+                    .withDescription("Only needed by `excel` file format");
 
     public static final Option<String> ROW_DELIMITER =
             Options.key("row_delimiter")
@@ -343,4 +329,11 @@ public class FileBaseSinkOptions extends FileBaseOptions {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("When using kerberos, We should specify the keytab path");
+
+    public static final Option<Boolean> MERGE_UPDATE_EVENT =
+            Options.key("merge_update_event")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Only used when file_format_type is canal_json,debezium_json,maxwell_json. set true,then when serialize data,UPDATE_AFTER and UPDATE_BEFORE event will merge into UPDATE data;if set false, when serialize data will get UPDATE_AFTER and UPDATE_BEFORE event ");
 }

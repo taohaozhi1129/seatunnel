@@ -34,63 +34,83 @@ public class JdbcConnectionConfig implements Serializable {
     private String driverName;
     private String compatibleMode;
     private int connectionCheckTimeoutSeconds =
-            JdbcOptions.CONNECTION_CHECK_TIMEOUT_SEC.defaultValue();
-    private int maxRetries = JdbcOptions.MAX_RETRIES.defaultValue();
+            JdbcCommonOptions.CONNECTION_CHECK_TIMEOUT_SEC.defaultValue();
+    private int maxRetries = JdbcSinkOptions.MAX_RETRIES.defaultValue();
     private String username;
     private String password;
     private String query;
 
-    private boolean autoCommit = JdbcOptions.AUTO_COMMIT.defaultValue();
+    private boolean autoCommit = JdbcSinkOptions.AUTO_COMMIT.defaultValue();
 
-    private int batchSize = JdbcOptions.BATCH_SIZE.defaultValue();
+    private int batchSize = JdbcSinkOptions.BATCH_SIZE.defaultValue();
 
     private String xaDataSourceClassName;
 
-    private boolean decimalTypeNarrowing = JdbcOptions.DECIMAL_TYPE_NARROWING.defaultValue();
+    private boolean decimalTypeNarrowing = JdbcCommonOptions.DECIMAL_TYPE_NARROWING.defaultValue();
+    private boolean intTypeNarrowing = JdbcCommonOptions.INT_TYPE_NARROWING.defaultValue();
 
-    private int maxCommitAttempts = JdbcOptions.MAX_COMMIT_ATTEMPTS.defaultValue();
+    private int maxCommitAttempts = JdbcSinkOptions.MAX_COMMIT_ATTEMPTS.defaultValue();
 
-    private int transactionTimeoutSec = JdbcOptions.TRANSACTION_TIMEOUT_SEC.defaultValue();
+    private int transactionTimeoutSec = JdbcSinkOptions.TRANSACTION_TIMEOUT_SEC.defaultValue();
 
-    private boolean useKerberos = JdbcOptions.USE_KERBEROS.defaultValue();
+    private int socketTimeoutMs = JdbcCommonOptions.SOCKET_TIMEOUT_MS.defaultValue();
+
+    private int connectTimeoutMs = JdbcCommonOptions.CONNECT_TIMEOUT_MS.defaultValue();
+
+    private boolean useKerberos = JdbcCommonOptions.USE_KERBEROS.defaultValue();
 
     private String kerberosPrincipal;
 
     private String kerberosKeytabPath;
 
-    private String krb5Path = JdbcOptions.KRB5_PATH.defaultValue();
+    private String krb5Path = JdbcCommonOptions.KRB5_PATH.defaultValue();
 
-    private String dialect = JdbcOptions.DIALECT.defaultValue();
+    private String dialect = JdbcCommonOptions.DIALECT.defaultValue();
 
     private Map<String, String> properties;
+    private String region;
+    private String accessKeyId;
+    private String secretAccessKey;
+
+    private boolean handleBlobAsString = JdbcCommonOptions.HANDLE_BLOB_AS_STRING.defaultValue();
 
     public static JdbcConnectionConfig of(ReadonlyConfig config) {
         JdbcConnectionConfig.Builder builder = JdbcConnectionConfig.builder();
-        builder.url(config.get(JdbcOptions.URL));
-        builder.compatibleMode(config.get(JdbcOptions.COMPATIBLE_MODE));
-        builder.driverName(config.get(JdbcOptions.DRIVER));
-        builder.autoCommit(config.get(JdbcOptions.AUTO_COMMIT));
-        builder.maxRetries(config.get(JdbcOptions.MAX_RETRIES));
-        builder.connectionCheckTimeoutSeconds(config.get(JdbcOptions.CONNECTION_CHECK_TIMEOUT_SEC));
-        builder.batchSize(config.get(JdbcOptions.BATCH_SIZE));
-        if (config.get(JdbcOptions.IS_EXACTLY_ONCE)) {
-            builder.xaDataSourceClassName(config.get(JdbcOptions.XA_DATA_SOURCE_CLASS_NAME));
-            builder.maxCommitAttempts(config.get(JdbcOptions.MAX_COMMIT_ATTEMPTS));
-            builder.transactionTimeoutSec(config.get(JdbcOptions.TRANSACTION_TIMEOUT_SEC));
+        builder.url(config.get(JdbcCommonOptions.URL));
+        builder.compatibleMode(config.get(JdbcCommonOptions.COMPATIBLE_MODE));
+        builder.driverName(config.get(JdbcCommonOptions.DRIVER));
+        builder.autoCommit(config.get(JdbcSinkOptions.AUTO_COMMIT));
+        builder.maxRetries(config.get(JdbcSinkOptions.MAX_RETRIES));
+        builder.connectionCheckTimeoutSeconds(
+                config.get(JdbcCommonOptions.CONNECTION_CHECK_TIMEOUT_SEC));
+        builder.socketTimeoutMs(config.get(JdbcCommonOptions.SOCKET_TIMEOUT_MS));
+        builder.connectTimeoutMs(config.get(JdbcCommonOptions.CONNECT_TIMEOUT_MS));
+        builder.batchSize(config.get(JdbcSinkOptions.BATCH_SIZE));
+        builder.handleBlobAsString(config.get(JdbcCommonOptions.HANDLE_BLOB_AS_STRING));
+        if (config.get(JdbcSinkOptions.IS_EXACTLY_ONCE)) {
+            builder.xaDataSourceClassName(config.get(JdbcSinkOptions.XA_DATA_SOURCE_CLASS_NAME));
+            builder.maxCommitAttempts(config.get(JdbcSinkOptions.MAX_COMMIT_ATTEMPTS));
+            builder.transactionTimeoutSec(config.get(JdbcSinkOptions.TRANSACTION_TIMEOUT_SEC));
             builder.maxRetries(0);
         }
-        if (config.get(JdbcOptions.USE_KERBEROS)) {
-            builder.useKerberos(config.get(JdbcOptions.USE_KERBEROS));
-            builder.kerberosPrincipal(config.get(JdbcOptions.KERBEROS_PRINCIPAL));
-            builder.kerberosKeytabPath(config.get(JdbcOptions.KERBEROS_KEYTAB_PATH));
-            builder.krb5Path(config.get(JdbcOptions.KRB5_PATH));
+        if (config.get(JdbcCommonOptions.USE_KERBEROS)) {
+            builder.useKerberos(config.get(JdbcCommonOptions.USE_KERBEROS));
+            builder.kerberosPrincipal(config.get(JdbcCommonOptions.KERBEROS_PRINCIPAL));
+            builder.kerberosKeytabPath(config.get(JdbcCommonOptions.KERBEROS_KEYTAB_PATH));
+            builder.krb5Path(config.get(JdbcCommonOptions.KRB5_PATH));
         }
-        config.getOptional(JdbcOptions.USER).ifPresent(builder::username);
-        config.getOptional(JdbcOptions.PASSWORD).ifPresent(builder::password);
-        config.getOptional(JdbcOptions.PROPERTIES).ifPresent(builder::properties);
-        config.getOptional(JdbcOptions.DECIMAL_TYPE_NARROWING)
+        config.getOptional(JdbcCommonOptions.USERNAME).ifPresent(builder::username);
+        config.getOptional(JdbcCommonOptions.PASSWORD).ifPresent(builder::password);
+        config.getOptional(JdbcCommonOptions.PROPERTIES).ifPresent(builder::properties);
+        config.getOptional(JdbcCommonOptions.DECIMAL_TYPE_NARROWING)
                 .ifPresent(builder::decimalTypeNarrowing);
-        config.getOptional(JdbcOptions.DIALECT).ifPresent(builder::dialect);
+        config.getOptional(JdbcCommonOptions.INT_TYPE_NARROWING)
+                .ifPresent(builder::intTypeNarrowing);
+        config.getOptional(JdbcCommonOptions.DIALECT).ifPresent(builder::dialect);
+        config.getOptional(JdbcCommonOptions.ACCESS_KEY_ID).ifPresent(builder::accessKeyId);
+        config.getOptional(JdbcCommonOptions.SECRET_ACCESS_KEY).ifPresent(builder::secretAccessKey);
+        config.getOptional(JdbcCommonOptions.REGION).ifPresent(builder::region);
+
         return builder.build();
     }
 
@@ -115,23 +135,31 @@ public class JdbcConnectionConfig implements Serializable {
         private String driverName;
         private String compatibleMode;
         private int connectionCheckTimeoutSeconds =
-                JdbcOptions.CONNECTION_CHECK_TIMEOUT_SEC.defaultValue();
-        private int maxRetries = JdbcOptions.MAX_RETRIES.defaultValue();
+                JdbcCommonOptions.CONNECTION_CHECK_TIMEOUT_SEC.defaultValue();
+        private int maxRetries = JdbcSinkOptions.MAX_RETRIES.defaultValue();
         private String username;
         private String password;
         private String query;
-        private boolean autoCommit = JdbcOptions.AUTO_COMMIT.defaultValue();
-        private int batchSize = JdbcOptions.BATCH_SIZE.defaultValue();
+        private boolean autoCommit = JdbcSinkOptions.AUTO_COMMIT.defaultValue();
+        private int batchSize = JdbcSinkOptions.BATCH_SIZE.defaultValue();
         private String xaDataSourceClassName;
-        private boolean decimalTypeNarrowing = JdbcOptions.DECIMAL_TYPE_NARROWING.defaultValue();
-        private int maxCommitAttempts = JdbcOptions.MAX_COMMIT_ATTEMPTS.defaultValue();
-        private int transactionTimeoutSec = JdbcOptions.TRANSACTION_TIMEOUT_SEC.defaultValue();
+        private boolean decimalTypeNarrowing =
+                JdbcCommonOptions.DECIMAL_TYPE_NARROWING.defaultValue();
+        private boolean intTypeNarrowing = JdbcCommonOptions.INT_TYPE_NARROWING.defaultValue();
+        private boolean handleBlobAsString = JdbcCommonOptions.HANDLE_BLOB_AS_STRING.defaultValue();
+        private int maxCommitAttempts = JdbcSinkOptions.MAX_COMMIT_ATTEMPTS.defaultValue();
+        private int transactionTimeoutSec = JdbcSinkOptions.TRANSACTION_TIMEOUT_SEC.defaultValue();
+        private int socketTimeoutMs = JdbcCommonOptions.SOCKET_TIMEOUT_MS.defaultValue();
+        private int connectTimeoutMs = JdbcCommonOptions.CONNECT_TIMEOUT_MS.defaultValue();
         private Map<String, String> properties;
-        public boolean useKerberos = JdbcOptions.USE_KERBEROS.defaultValue();
+        public boolean useKerberos = JdbcCommonOptions.USE_KERBEROS.defaultValue();
         public String kerberosPrincipal;
         public String kerberosKeytabPath;
-        public String krb5Path = JdbcOptions.KRB5_PATH.defaultValue();
-        public String dialect = JdbcOptions.DIALECT.defaultValue();
+        public String krb5Path = JdbcCommonOptions.KRB5_PATH.defaultValue();
+        public String dialect = JdbcCommonOptions.DIALECT.defaultValue();
+        private String region;
+        private String accessKeyId;
+        private String secretAccessKey;
 
         private Builder() {}
 
@@ -157,6 +185,11 @@ public class JdbcConnectionConfig implements Serializable {
 
         public Builder decimalTypeNarrowing(boolean decimalTypeNarrowing) {
             this.decimalTypeNarrowing = decimalTypeNarrowing;
+            return this;
+        }
+
+        public Builder intTypeNarrowing(boolean intTypeNarrowing) {
+            this.intTypeNarrowing = intTypeNarrowing;
             return this;
         }
 
@@ -205,6 +238,16 @@ public class JdbcConnectionConfig implements Serializable {
             return this;
         }
 
+        public Builder socketTimeoutMs(int socketTimeoutMs) {
+            this.socketTimeoutMs = socketTimeoutMs;
+            return this;
+        }
+
+        public Builder connectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+            return this;
+        }
+
         public Builder useKerberos(boolean useKerberos) {
             this.useKerberos = useKerberos;
             return this;
@@ -235,6 +278,26 @@ public class JdbcConnectionConfig implements Serializable {
             return this;
         }
 
+        public Builder handleBlobAsString(boolean handleBlobAsString) {
+            this.handleBlobAsString = handleBlobAsString;
+            return this;
+        }
+
+        public Builder region(String region) {
+            this.region = region;
+            return this;
+        }
+
+        public Builder accessKeyId(String accessKeyId) {
+            this.accessKeyId = accessKeyId;
+            return this;
+        }
+
+        public Builder secretAccessKey(String secretAccessKey) {
+            this.secretAccessKey = secretAccessKey;
+            return this;
+        }
+
         public JdbcConnectionConfig build() {
             JdbcConnectionConfig jdbcConnectionConfig = new JdbcConnectionConfig();
             jdbcConnectionConfig.batchSize = this.batchSize;
@@ -247,9 +310,13 @@ public class JdbcConnectionConfig implements Serializable {
             jdbcConnectionConfig.autoCommit = this.autoCommit;
             jdbcConnectionConfig.username = this.username;
             jdbcConnectionConfig.transactionTimeoutSec = this.transactionTimeoutSec;
+            jdbcConnectionConfig.socketTimeoutMs = this.socketTimeoutMs;
+            jdbcConnectionConfig.connectTimeoutMs = this.connectTimeoutMs;
             jdbcConnectionConfig.maxCommitAttempts = this.maxCommitAttempts;
             jdbcConnectionConfig.xaDataSourceClassName = this.xaDataSourceClassName;
             jdbcConnectionConfig.decimalTypeNarrowing = this.decimalTypeNarrowing;
+            jdbcConnectionConfig.intTypeNarrowing = this.intTypeNarrowing;
+            jdbcConnectionConfig.handleBlobAsString = this.handleBlobAsString;
             jdbcConnectionConfig.useKerberos = this.useKerberos;
             jdbcConnectionConfig.kerberosPrincipal = this.kerberosPrincipal;
             jdbcConnectionConfig.kerberosKeytabPath = this.kerberosKeytabPath;
@@ -257,7 +324,19 @@ public class JdbcConnectionConfig implements Serializable {
             jdbcConnectionConfig.dialect = this.dialect;
             jdbcConnectionConfig.properties =
                     this.properties == null ? new HashMap<>() : this.properties;
+
+            jdbcConnectionConfig.region = this.region;
+            jdbcConnectionConfig.accessKeyId = this.accessKeyId;
+            jdbcConnectionConfig.secretAccessKey = this.secretAccessKey;
             return jdbcConnectionConfig;
         }
+    }
+
+    public boolean isHandleBlobAsString() {
+        return handleBlobAsString;
+    }
+
+    public void setHandleBlobAsString(boolean handleBlobAsString) {
+        this.handleBlobAsString = handleBlobAsString;
     }
 }

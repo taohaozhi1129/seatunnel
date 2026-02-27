@@ -18,6 +18,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.sqlserver;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -28,8 +30,6 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.AbstractJdbcCatalo
 import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.utils.CatalogUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.sqlserver.SqlServerTypeConverter;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.sqlserver.SqlserverTypeMapper;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -90,9 +90,9 @@ public class SqlServerCatalog extends AbstractJdbcCatalog {
 
     @Override
     protected String getListTableSql(String databaseName) {
-        return "SELECT TABLE_SCHEMA, TABLE_NAME FROM "
+        return "SELECT TABLE_SCHEMA, TABLE_NAME FROM ["
                 + databaseName
-                + ".INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'";
+                + "].INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'";
     }
 
     @Override
@@ -144,12 +144,12 @@ public class SqlServerCatalog extends AbstractJdbcCatalog {
 
     @Override
     protected String getCreateDatabaseSql(String databaseName) {
-        return String.format("CREATE DATABASE %s", databaseName);
+        return String.format("CREATE DATABASE [%s]", databaseName);
     }
 
     @Override
     protected String getDropDatabaseSql(String databaseName) {
-        return String.format("DROP DATABASE %s;", databaseName);
+        return String.format("DROP DATABASE [%s];", databaseName);
     }
 
     @Override

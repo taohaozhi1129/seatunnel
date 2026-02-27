@@ -17,15 +17,16 @@
 
 package org.apache.seatunnel.engine.server;
 
+import org.apache.seatunnel.engine.common.Constant;
 import org.apache.seatunnel.engine.common.config.EngineConfig;
 import org.apache.seatunnel.engine.common.config.SeaTunnelConfig;
 import org.apache.seatunnel.engine.common.config.server.ScheduleStrategy;
+import org.apache.seatunnel.engine.common.job.JobStatus;
 import org.apache.seatunnel.engine.common.runtime.ExecutionMode;
 import org.apache.seatunnel.engine.common.utils.PassiveCompletableFuture;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalDag;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
 import org.apache.seatunnel.engine.core.job.JobInfo;
-import org.apache.seatunnel.engine.core.job.JobStatus;
 import org.apache.seatunnel.engine.core.job.PipelineStatus;
 import org.apache.seatunnel.engine.server.dag.physical.PhysicalVertex;
 import org.apache.seatunnel.engine.server.dag.physical.PipelineLocation;
@@ -123,8 +124,7 @@ public class CoordinatorServiceWithCancelPendingJobTest extends AbstractSeaTunne
         JobMaster jobMaster = newJobInstanceWithRunningState(jobId);
 
         // Verify that the task is pending
-        Assertions.assertTrue(
-                server.getCoordinatorService().pendingJobMasterMap.containsKey(jobId));
+        Assertions.assertTrue(server.getCoordinatorService().getPendingJobQueue().contains(jobId));
 
         // Cancel Task
         PassiveCompletableFuture<Void> voidPassiveCompletableFuture =
@@ -132,15 +132,28 @@ public class CoordinatorServiceWithCancelPendingJobTest extends AbstractSeaTunne
         voidPassiveCompletableFuture.join();
 
         // Verify if the task has been deleted in pending
-        Assertions.assertFalse(
-                server.getCoordinatorService().pendingJobMasterMap.containsKey(jobId));
+        Assertions.assertFalse(server.getCoordinatorService().getPendingJobQueue().contains(jobId));
+
+        IMap<Object, Object> runningJobInfoImap =
+                nodeEngine.getHazelcastInstance().getMap(Constant.IMAP_RUNNING_JOB_INFO);
+        IMap<Object, Object> runningJobStateImap =
+                nodeEngine.getHazelcastInstance().getMap(Constant.IMAP_RUNNING_JOB_STATE);
+        IMap<Object, Object> runningStateTimestampsImap =
+                nodeEngine.getHazelcastInstance().getMap(Constant.IMAP_STATE_TIMESTAMPS);
 
         // Verify if the final status of the task is cancelled
-        await().atMost(120, TimeUnit.SECONDS)
+        await().pollDelay(3, TimeUnit.SECONDS)
+                .atMost(120, TimeUnit.SECONDS)
                 .untilAsserted(
-                        () ->
-                                Assertions.assertEquals(
-                                        JobStatus.CANCELED, jobMaster.getJobStatus()));
+                        () -> {
+                            Assertions.assertEquals(
+                                    JobStatus.CANCELED,
+                                    server.getCoordinatorService().getJobStatus(jobId));
+
+                            Assertions.assertTrue(runningJobInfoImap.isEmpty());
+                            Assertions.assertTrue(runningJobStateImap.isEmpty());
+                            Assertions.assertTrue(runningStateTimestampsImap.isEmpty());
+                        });
     }
 
     private JobMaster newJobInstanceWithRunningState(long jobId) throws InterruptedException {

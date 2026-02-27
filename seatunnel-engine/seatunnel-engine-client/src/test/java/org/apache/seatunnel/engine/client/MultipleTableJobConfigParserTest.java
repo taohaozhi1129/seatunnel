@@ -18,6 +18,7 @@
 package org.apache.seatunnel.engine.client;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.ImmutablePair;
 
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -31,8 +32,6 @@ import org.apache.seatunnel.engine.core.classloader.ClassLoaderService;
 import org.apache.seatunnel.engine.core.dag.actions.Action;
 import org.apache.seatunnel.engine.core.dag.actions.SinkAction;
 import org.apache.seatunnel.engine.core.parse.MultipleTableJobConfigParser;
-
-import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -54,7 +53,7 @@ public class MultipleTableJobConfigParserTest {
     @Test
     public void testSimpleJobParse() {
         Common.setDeployMode(DeployMode.CLIENT);
-        String filePath = TestUtils.getResource("/batch_fakesource_to_file.conf");
+        String filePath = ContentFormatUtilTest.getResource("/batch_fakesource_to_file.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext());
         MultipleTableJobConfigParser jobConfigParser =
@@ -75,7 +74,8 @@ public class MultipleTableJobConfigParserTest {
     @Test
     public void testComplexJobParse() {
         Common.setDeployMode(DeployMode.CLIENT);
-        String filePath = TestUtils.getResource("/batch_fakesource_to_file_complex.conf");
+        String filePath =
+                ContentFormatUtilTest.getResource("/batch_fakesource_to_file_complex.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext());
         MultipleTableJobConfigParser jobConfigParser =
@@ -107,7 +107,7 @@ public class MultipleTableJobConfigParserTest {
     @Test
     public void testMultipleSinkName() {
         Common.setDeployMode(DeployMode.CLIENT);
-        String filePath = TestUtils.getResource("/batch_fakesource_to_two_file.conf");
+        String filePath = ContentFormatUtilTest.getResource("/batch_fakesource_to_two_file.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext());
         MultipleTableJobConfigParser jobConfigParser =
@@ -126,7 +126,8 @@ public class MultipleTableJobConfigParserTest {
     @Test
     public void testMultipleTableSourceWithMultiTableSinkParse() throws IOException {
         Common.setDeployMode(DeployMode.CLIENT);
-        String filePath = TestUtils.getResource("/batch_fake_to_console_multi_table.conf");
+        String filePath =
+                ContentFormatUtilTest.getResource("/batch_fake_to_console_multi_table.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext());
         Config config = ConfigBuilder.of(Paths.get(filePath));
@@ -146,7 +147,8 @@ public class MultipleTableJobConfigParserTest {
     public void testDuplicatedTransformInOnePipeline() {
         Common.setDeployMode(DeployMode.CLIENT);
         String filePath =
-                TestUtils.getResource("/batch_fake_to_console_with_duplicated_transform.conf");
+                ContentFormatUtilTest.getResource(
+                        "/batch_fake_to_console_with_duplicated_transform.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext());
         Config config = ConfigBuilder.of(Paths.get(filePath));
@@ -161,7 +163,7 @@ public class MultipleTableJobConfigParserTest {
     @Test
     public void testCreateDifferentClassLoader() {
         Common.setDeployMode(DeployMode.CLIENT);
-        String filePath = TestUtils.getResource("/batch_fakesource_to_file.conf");
+        String filePath = ContentFormatUtilTest.getResource("/batch_fakesource_to_file.conf");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setJobContext(new JobContext(System.currentTimeMillis()));
         final ClassLoader[] classLoaders = new ClassLoader[3];
@@ -219,5 +221,24 @@ public class MultipleTableJobConfigParserTest {
         Assertions.assertEquals(classLoaders[0], classLoaders[1]);
         Assertions.assertNotEquals(classLoaders[0], classLoaders[2]);
         Assertions.assertNotEquals(classLoaders[1], classLoaders[2]);
+    }
+
+    @Test
+    public void testMultipleTableJobConfigWithEnvOptionCheck() {
+        Common.setDeployMode(DeployMode.CLIENT);
+        String filePath =
+                ContentFormatUtilTest.getResource(
+                        "/batch_fake_to_console_with_error_env_option.conf");
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.setJobContext(new JobContext());
+        Config config = ConfigBuilder.of(Paths.get(filePath));
+
+        Exception checkExp = null;
+        try {
+            new MultipleTableJobConfigParser(config, new IdGenerator(), jobConfig);
+        } catch (Exception e) {
+            checkExp = e;
+        }
+        Assertions.assertInstanceOf(IllegalArgumentException.class, checkExp);
     }
 }

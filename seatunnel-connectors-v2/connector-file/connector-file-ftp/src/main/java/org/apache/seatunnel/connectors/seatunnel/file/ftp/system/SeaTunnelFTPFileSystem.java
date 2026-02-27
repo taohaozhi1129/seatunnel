@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.file.ftp.system;
 
+import org.apache.seatunnel.connectors.seatunnel.file.ftp.config.FtpFileBaseOptions;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.net.ftp.FTP;
@@ -66,6 +68,9 @@ public class SeaTunnelFTPFileSystem extends FileSystem {
     public static final String FS_FTP_HOST_PORT = "fs.ftp.host.port";
     public static final String FS_FTP_PASSWORD_PREFIX = "fs.ftp.password.";
     public static final String FS_FTP_CONNECTION_MODE = "fs.ftp.connection.mode";
+    public static final String FS_FTP_REMOTE_VERIFICATION_ENABLED =
+            "fs.ftp.remote.verification.enabled";
+    public static final String FS_FTP_CONTROL_ENCODING = "fs.ftp.control.encoding";
 
     public static final String E_SAME_DIRECTORY_ONLY = "only same directory renames are supported";
 
@@ -132,6 +137,17 @@ public class SeaTunnelFTPFileSystem extends FileSystem {
         // Get the connection mode from configuration, default to passive_local mode
         String connectionMode =
                 conf.get(FS_FTP_CONNECTION_MODE, FtpConnectionMode.ACTIVE_LOCAL.getMode());
+
+        // Set control encoding BEFORE connecting - this is critical for special characters
+        String controlEncoding = conf.get(FS_FTP_CONTROL_ENCODING, "UTF-8");
+        client.setControlEncoding(controlEncoding);
+
+        // Check if remote verification is enabled
+        boolean remoteVerificationEnabled =
+                conf.getBoolean(
+                        FS_FTP_REMOTE_VERIFICATION_ENABLED,
+                        FtpFileBaseOptions.FTP_REMOTE_VERIFICATION_ENABLED.defaultValue());
+        client.setRemoteVerificationEnabled(remoteVerificationEnabled);
 
         // Retrieve host, port, user, and password from configuration
         String host = conf.get(FS_FTP_HOST);
@@ -255,7 +271,15 @@ public class SeaTunnelFTPFileSystem extends FileSystem {
      */
     private Path makeAbsolute(Path workDir, Path path) {
         if (path.isAbsolute()) {
-            return path;
+            String filePath = path.toUri().getPath();
+            if (filePath.equals("/")) {
+                return workDir;
+            }
+            if (filePath.startsWith(workDir.toUri().getPath())) {
+                return path;
+            }
+            // delete '/'
+            return new Path(workDir, filePath.substring(1));
         }
         return new Path(workDir, path);
     }

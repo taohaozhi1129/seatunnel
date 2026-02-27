@@ -27,6 +27,7 @@ import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileBaseSourceOptions;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileFormat;
+import org.apache.seatunnel.connectors.seatunnel.file.config.FileSyncMode;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileSystemType;
 import org.apache.seatunnel.connectors.seatunnel.file.ftp.config.FtpFileSourceOptions;
 
@@ -60,6 +61,7 @@ public class FtpFileSourceFactory implements TableSourceFactory {
                 .conditional(
                         FileBaseSourceOptions.FILE_FORMAT_TYPE,
                         FileFormat.TEXT,
+                        FileBaseSourceOptions.ROW_DELIMITER,
                         FileBaseSourceOptions.FIELD_DELIMITER,
                         FileBaseSourceOptions.SKIP_HEADER_ROW_NUMBER)
                 .conditional(
@@ -86,9 +88,9 @@ public class FtpFileSourceFactory implements TableSourceFactory {
                                 FileFormat.TEXT, FileFormat.JSON, FileFormat.CSV, FileFormat.XML),
                         FileBaseSourceOptions.ENCODING)
                 .optional(FileBaseSourceOptions.PARSE_PARTITION_FROM_PATH)
-                .optional(FileBaseSourceOptions.DATE_FORMAT)
-                .optional(FileBaseSourceOptions.DATETIME_FORMAT)
-                .optional(FileBaseSourceOptions.TIME_FORMAT)
+                .optional(FileBaseSourceOptions.DATE_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.DATETIME_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.TIME_FORMAT_LEGACY)
                 .optional(FileBaseSourceOptions.FILE_FILTER_PATTERN)
                 .optional(FileBaseSourceOptions.COMPRESS_CODEC)
                 .optional(FtpFileSourceOptions.FTP_CONNECTION_MODE)
@@ -96,6 +98,19 @@ public class FtpFileSourceFactory implements TableSourceFactory {
                 .optional(FileBaseSourceOptions.NULL_FORMAT)
                 .optional(FileBaseSourceOptions.FILENAME_EXTENSION)
                 .optional(FileBaseSourceOptions.READ_COLUMNS)
+                .optional(FtpFileSourceOptions.FTP_REMOTE_VERIFICATION_ENABLED)
+                .optional(FtpFileSourceOptions.FTP_CONTROL_ENCODING)
+                .optional(FileBaseSourceOptions.QUOTE_CHAR)
+                .optional(FileBaseSourceOptions.ESCAPE_CHAR)
+                .optional(
+                        FileBaseSourceOptions.SYNC_MODE,
+                        FileBaseSourceOptions.TARGET_HADOOP_CONF,
+                        FileBaseSourceOptions.UPDATE_STRATEGY,
+                        FileBaseSourceOptions.COMPARE_MODE)
+                .conditional(
+                        FileBaseSourceOptions.SYNC_MODE,
+                        FileSyncMode.UPDATE,
+                        FileBaseSourceOptions.TARGET_PATH)
                 .build();
     }
 

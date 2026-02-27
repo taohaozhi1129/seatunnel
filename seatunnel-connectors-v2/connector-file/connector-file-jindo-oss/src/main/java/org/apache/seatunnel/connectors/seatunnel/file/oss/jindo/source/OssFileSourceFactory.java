@@ -51,6 +51,7 @@ public class OssFileSourceFactory implements TableSourceFactory {
                 .conditional(
                         FileBaseSourceOptions.FILE_FORMAT_TYPE,
                         FileFormat.TEXT,
+                        FileBaseSourceOptions.ROW_DELIMITER,
                         FileBaseSourceOptions.FIELD_DELIMITER,
                         FileBaseSourceOptions.SKIP_HEADER_ROW_NUMBER)
                 .conditional(
@@ -77,14 +78,16 @@ public class OssFileSourceFactory implements TableSourceFactory {
                                 FileFormat.TEXT, FileFormat.JSON, FileFormat.CSV, FileFormat.XML),
                         FileBaseSourceOptions.ENCODING)
                 .optional(FileBaseSourceOptions.PARSE_PARTITION_FROM_PATH)
-                .optional(FileBaseSourceOptions.DATE_FORMAT)
-                .optional(FileBaseSourceOptions.DATETIME_FORMAT)
-                .optional(FileBaseSourceOptions.TIME_FORMAT)
+                .optional(FileBaseSourceOptions.DATE_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.DATETIME_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.TIME_FORMAT_LEGACY)
                 .optional(FileBaseSourceOptions.FILE_FILTER_PATTERN)
                 .optional(FileBaseSourceOptions.COMPRESS_CODEC)
                 .optional(FileBaseSourceOptions.NULL_FORMAT)
                 .optional(FileBaseSourceOptions.FILENAME_EXTENSION)
                 .optional(FileBaseSourceOptions.READ_COLUMNS)
+                .optional(FileBaseSourceOptions.QUOTE_CHAR)
+                .optional(FileBaseSourceOptions.ESCAPE_CHAR)
                 .build();
     }
 

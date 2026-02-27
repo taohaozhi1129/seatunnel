@@ -37,7 +37,9 @@ import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.BulkResponse;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.ScrollResult;
 import org.apache.seatunnel.e2e.common.TestResource;
 import org.apache.seatunnel.e2e.common.TestSuiteBase;
+import org.apache.seatunnel.e2e.common.container.EngineType;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
+import org.apache.seatunnel.e2e.common.junit.DisabledOnContainer;
 import org.apache.seatunnel.e2e.common.util.ContainerUtil;
 
 import org.apache.commons.io.IOUtils;
@@ -74,7 +76,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -97,6 +98,8 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
 
     private EsRestClient esRestClient;
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @BeforeEach
     @Override
     public void startUp() throws Exception {
@@ -116,17 +119,16 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
                                         DockerLoggerFactory.getLogger("elasticsearch:8.9.0")));
         Startables.deepStart(Stream.of(container)).join();
         log.info("Elasticsearch container started");
-        esRestClient =
-                EsRestClient.createInstance(
-                        Lists.newArrayList("https://" + container.getHttpHostAddress()),
-                        Optional.of("elastic"),
-                        Optional.of("elasticsearch"),
-                        false,
-                        false,
-                        Optional.empty(),
-                        Optional.empty(),
-                        Optional.empty(),
-                        Optional.empty());
+        // Create configuration for EsRestClient
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("hosts", Lists.newArrayList("https://" + container.getHttpHostAddress()));
+        configMap.put("username", "elastic");
+        configMap.put("password", "elasticsearch");
+        configMap.put("tls_verify_certificate", false);
+        configMap.put("tls_verify_hostname", false);
+
+        ReadonlyConfig config = ReadonlyConfig.fromMap(configMap);
+        esRestClient = EsRestClient.createInstance(config);
         testDataset1 = generateTestDataSet1();
         testDataset2 = generateTestDataSet2();
         createIndexForResourceNull("st_index");
@@ -136,6 +138,7 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
         createIndexWithNestType();
         createIndexForSqlSearch();
         generateTestSqlDataSet();
+        createTestIndexWithData();
     }
 
     /** create a index,and bulk some documents */
@@ -154,6 +157,45 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
                                 .toURI(),
                         StandardCharsets.UTF_8);
         esRestClient.createIndex("st_index_sql", mapping);
+    }
+
+    private void createTestIndexWithData() throws IOException, InterruptedException {
+        String indexName = "st_index_runtime";
+
+        // Create index with explicit mapping for timestamp field
+        String mapping =
+                "{"
+                        + "  \"mappings\": {"
+                        + "    \"properties\": {"
+                        + "      \"c_string\": { \"type\": \"keyword\" },"
+                        + "      \"c_int\": { \"type\": \"integer\" },"
+                        + "      \"c_timestamp\": { \"type\": \"date\" }"
+                        + "    }"
+                        + "  }"
+                        + "}";
+        esRestClient.createIndex(indexName, mapping);
+        log.info("Created index with mapping: {}", indexName);
+
+        // Prepare test data
+        List<String> testData = generateRuntimeTestData();
+
+        // Bulk insert data
+        StringBuilder bulkRequestBody = new StringBuilder();
+        for (String doc : testData) {
+            bulkRequestBody
+                    .append("{\"index\":{\"_index\":\"")
+                    .append(indexName)
+                    .append("\"}}\n")
+                    .append(doc)
+                    .append("\n");
+        }
+
+        BulkResponse response = esRestClient.bulk(bulkRequestBody.toString());
+        Assertions.assertFalse(response.isErrors(), "Bulk insert should not have errors");
+        log.info("Inserted {} documents into index: {}", testData.size(), indexName);
+
+        // Wait for index refresh
+        Thread.sleep(2000);
     }
 
     private void generateTestSqlDataSet() throws JsonProcessingException, InterruptedException {
@@ -317,6 +359,49 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
     }
 
     @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason = "Currently SPARK and FLINK not support adapt")
+    public void testElasticsearchWithVector(TestContainer container)
+            throws IOException, InterruptedException {
+        String mapping =
+                "{\n"
+                        + "  \"mappings\": {\n"
+                        + "    \"properties\": {\n"
+                        + "      \"review_id\": {\"type\": \"long\"},\n"
+                        + "      \"review_embedding\": {\n"
+                        + "        \"type\": \"dense_vector\",\n"
+                        + "        \"dims\": 1024\n"
+                        + "      },\n"
+                        + "      \"review_text\": {\"type\": \"text\"},\n"
+                        + "      \"review_score\": {\"type\": \"float\"}\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "}";
+
+        // create index
+        esRestClient.createIndex("vector_test", mapping);
+        Thread.sleep(INDEX_REFRESH_MILL_DELAY);
+
+        Container.ExecResult execResult =
+                container.executeJob("/elasticsearch/fake-to-elasticsearch-vector.conf");
+        Assertions.assertEquals(0, execResult.getExitCode());
+
+        // Wait for index refresh
+        Thread.sleep(INDEX_REFRESH_MILL_DELAY);
+
+        // Verify that 10 documents were inserted as specified in the config
+        Assertions.assertEquals(
+                10, esRestClient.getIndexDocsCount("vector_test").get(0).getDocsCount());
+
+        // Verify vector field exists in the mapping
+        Map<String, BasicTypeDefine<EsType>> fieldTypes =
+                esRestClient.getFieldTypeMapping("vector_test", Collections.emptyList());
+        Assertions.assertTrue(fieldTypes.containsKey("review_embedding"));
+    }
+
+    @TestTemplate
     public void testElasticsearchWithPIT(TestContainer container)
             throws IOException, InterruptedException {
         Container.ExecResult execResult =
@@ -325,6 +410,18 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
         List<String> sinkData = readSinkDataWithSchema("st_index_pit");
         // for DSL is: {"range":{"c_int":{"gte":10,"lte":20}}}
         Assertions.assertIterableEquals(mapTestDatasetForDSL(), sinkData);
+    }
+
+    @TestTemplate
+    public void testElasticsearchSourceWithRuntimeFields(TestContainer container)
+            throws IOException, InterruptedException {
+        Container.ExecResult execResult =
+                container.executeJob(
+                        "/elasticsearch/elasticsearch_source_with_runtime_fields.conf");
+        Assertions.assertEquals(0, execResult.getExitCode(), "Job should complete successfully");
+
+        log.info("Runtime fields test completed successfully");
+        log.info("Job output: {}", execResult.getStdout());
     }
 
     @TestTemplate
@@ -1038,6 +1135,49 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
             data.add(objectMapper.writeValueAsString(record));
         }
         return data;
+    }
+
+    @Test
+    public void testScrollAndSqlCursorResourceCleanup() throws Exception {
+
+        String scrollId = null;
+        try {
+            List<String> source = Arrays.asList("c_string", "c_int");
+            Map<String, Object> query = new HashMap<>();
+            query.put("match_all", Collections.emptyMap());
+
+            ScrollResult result = esRestClient.searchByScroll("st_index", source, query, "1m", 5);
+            scrollId = result.getScrollId();
+            Assertions.assertNotNull(scrollId, "Scroll ID should not be null");
+
+            int totalDocs = result.getDocs().size();
+            while (result.getDocs() != null && !result.getDocs().isEmpty()) {
+                result = esRestClient.searchWithScrollId(scrollId, "1m");
+                scrollId = result.getScrollId();
+                if (result.getDocs() != null) {
+                    totalDocs += result.getDocs().size();
+                }
+            }
+            log.info("Retrieved {} documents via Scroll API", totalDocs);
+
+        } finally {
+            if (scrollId != null) {
+                boolean cleaned = esRestClient.clearScroll(scrollId);
+                Assertions.assertTrue(cleaned, "Scroll context should be successfully cleaned up");
+            }
+        }
+    }
+
+    private List<String> generateRuntimeTestData() throws IOException {
+        List<String> testData = new ArrayList<>();
+
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("c_string", "test_1");
+        doc.put("c_int", 10);
+        doc.put("c_timestamp", "2024-01-15T10:00:00");
+        testData.add(OBJECT_MAPPER.writeValueAsString(doc));
+
+        return testData;
     }
 
     /**

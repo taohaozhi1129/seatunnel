@@ -17,14 +17,14 @@
 
 package org.apache.seatunnel.api.sink;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.ObjectUtils;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.ConstraintKey;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-
-import org.apache.commons.lang3.ObjectUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -139,6 +139,17 @@ public class TablePlaceholderProcessor {
                 String.join(FIELD_DELIMITER, schema.getFieldNames()));
     }
 
+    public static String replaceTablePartitionKeys(String placeholder, List<String> partitionKeys) {
+        if (partitionKeys != null && !partitionKeys.isEmpty()) {
+            String partitionKeysString = String.join(FIELD_DELIMITER, partitionKeys);
+            return replacePlaceholders(
+                    placeholder,
+                    TablePlaceholder.REPLACE_PARTITION_KEYS_KEY.getPlaceholder(),
+                    partitionKeysString);
+        }
+        return placeholder;
+    }
+
     public static ReadonlyConfig replaceTablePlaceholder(
             ReadonlyConfig config, CatalogTable table) {
         return replaceTablePlaceholder(config, table, Collections.emptyList());
@@ -163,6 +174,7 @@ public class TablePlaceholderProcessor {
                             replaceTableUniqueKey(
                                     strValue, table.getTableSchema().getConstraintKeys());
                     strValue = replaceTableFieldNames(strValue, table.getTableSchema());
+                    strValue = replaceTablePartitionKeys(strValue, table.getPartitionKeys());
                     copyOnWriteData.put(key, strValue);
                 } else if (value instanceof List) {
                     List listValue = (List) value;
@@ -190,6 +202,15 @@ public class TablePlaceholderProcessor {
                                         + "}")) {
                             strValue = replaceTableFieldNames(strValue, table.getTableSchema());
                             listValue = Arrays.asList(strValue.split(FIELD_DELIMITER));
+                        } else if (strValue.equals(
+                                "${"
+                                        + TablePlaceholder.REPLACE_PARTITION_KEYS_KEY
+                                                .getPlaceholder()
+                                        + "}")) {
+                            List<String> partitionKeys = table.getPartitionKeys();
+                            if (partitionKeys != null && !partitionKeys.isEmpty()) {
+                                listValue = new ArrayList<>(partitionKeys);
+                            }
                         }
                         copyOnWriteData.put(key, listValue);
                     }

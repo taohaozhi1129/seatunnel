@@ -18,6 +18,7 @@
 package org.apache.seatunnel.api.table.catalog;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
@@ -29,8 +30,6 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -219,12 +218,16 @@ public class CatalogTableUtil implements Serializable {
             tablePath = pluginOutputIdentifierOptional.map(TablePath::of).orElse(TablePath.DEFAULT);
         }
 
+        List<String> partitionKeys =
+                schemaConfig
+                        .getOptional(ConnectorCommonOptions.PARTITION_KEYS)
+                        .orElseGet(Collections::emptyList);
+
         return CatalogTable.of(
                 TableIdentifier.of(catalogName, tablePath),
                 tableSchema,
                 new HashMap<>(),
-                // todo: add partitionKeys?
-                new ArrayList<>(),
+                partitionKeys,
                 readonlyConfig.get(ConnectorCommonOptions.TABLE_COMMENT));
     }
 

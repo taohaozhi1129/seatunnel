@@ -21,12 +21,13 @@ import org.apache.seatunnel.common.utils.ExceptionUtils;
 import org.apache.seatunnel.common.utils.RetryUtils;
 import org.apache.seatunnel.engine.common.Constant;
 import org.apache.seatunnel.engine.common.exception.SeaTunnelEngineException;
+import org.apache.seatunnel.engine.common.job.JobResult;
+import org.apache.seatunnel.engine.common.job.JobStateEvent;
+import org.apache.seatunnel.engine.common.job.JobStatus;
 import org.apache.seatunnel.engine.common.utils.ExceptionUtil;
 import org.apache.seatunnel.engine.common.utils.PassiveCompletableFuture;
 import org.apache.seatunnel.engine.common.utils.concurrent.CompletableFuture;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
-import org.apache.seatunnel.engine.core.job.JobResult;
-import org.apache.seatunnel.engine.core.job.JobStatus;
 import org.apache.seatunnel.engine.core.job.PipelineExecutionState;
 import org.apache.seatunnel.engine.core.job.PipelineStatus;
 import org.apache.seatunnel.engine.server.execution.TaskGroupLocation;
@@ -191,29 +192,30 @@ public class PhysicalPlan {
     }
 
     public void cancelJob() {
-        if (getJobStatus().isEndState()) {
+        JobStatus jobStatus = getJobStatus();
+        if (jobStatus.isEndState()) {
             log.warn(
                     String.format(
-                            "%s is in end state %s, can not be cancel",
-                            jobFullName, getJobStatus()));
+                            "%s is in end state %s, can not be cancel", jobFullName, jobStatus));
             return;
         }
 
-        if (runningJobStateIMap.get(jobId) == JobStatus.PENDING) {
-            // The pending task needs to be directly set to 'cancelled' status because it has not
-            // started running yet
+        if (((JobStatus) runningJobStateIMap.get(jobId)).ordinal() <= JobStatus.PENDING.ordinal()) {
+            // Tasks with the status 'INITIALIZING', 'CREATED', 'PENDING' need to be set directly to
+            // the 'CANCELLED' state because it has not yet started running
             updateJobState(JobStatus.CANCELED);
+            jobEndFuture.complete(new JobResult(JobStatus.CANCELED));
         } else {
             updateJobState(JobStatus.CANCELING);
         }
     }
 
     public void savepointJob() {
-        if (getJobStatus().isEndState()) {
+        JobStatus jobStatus = getJobStatus();
+        if (jobStatus.isEndState()) {
             log.warn(
                     String.format(
-                            "%s is in end state %s, can not do savepoint",
-                            jobFullName, getJobStatus()));
+                            "%s is in end state %s, can not do savepoint", jobFullName, jobStatus));
             return;
         }
         updateJobState(JobStatus.DOING_SAVEPOINT);
@@ -231,13 +233,19 @@ public class PhysicalPlan {
         runningJobStateTimestampsIMap.set(jobId, stateTimestamps);
     }
 
+    public synchronized Long getStateTimestamp(@NonNull JobStatus jobStatus) {
+        Long[] stateTimestamps = runningJobStateTimestampsIMap.get(jobId);
+        if (stateTimestamps == null) {
+            return null;
+        }
+        return stateTimestamps[jobStatus.ordinal()];
+    }
+
     public synchronized void updateJobState(@NonNull JobStatus targetState) {
         try {
             JobStatus current = (JobStatus) runningJobStateIMap.get(jobId);
             log.debug(
-                    String.format(
-                            "Try to update the %s state from %s to %s",
-                            jobFullName, current, targetState));
+                    "Try to update the {} state from {} to {}", jobFullName, current, targetState);
 
             if (current.equals(targetState)) {
                 log.info(
@@ -251,11 +259,8 @@ public class PhysicalPlan {
                 throw new SeaTunnelEngineException(message);
             }
 
-            // now do the actual state transition
-            // we must update runningJobStateTimestampsIMap first and then can update
-            // runningJobStateIMap
-            // we must update runningJobStateTimestampsIMap first and then can update
-            // runningJobStateIMap
+            // Now do the actual state transition, we must update runningJobStateTimestampsIMap
+            // first and then can update runningJobStateIMap
             RetryUtils.retryWithException(
                     () -> {
                         updateStateTimestamps(targetState);
@@ -296,9 +301,10 @@ public class PhysicalPlan {
         updateJobState(JobStatus.FAILING);
     }
 
-    public void startJob() {
+    public synchronized void startJob() {
         isRunning = true;
         log.info("{} state process is start", getJobFullName());
+        updateJobState(JobStatus.SCHEDULED);
         stateProcess();
     }
 
@@ -312,7 +318,8 @@ public class PhysicalPlan {
             log.warn(String.format("%s state process is stopped", jobFullName));
             return;
         }
-        switch (getJobStatus()) {
+        JobStatus jobStatus = getJobStatus();
+        switch (jobStatus) {
             case CREATED:
                 updateJobState(JobStatus.SCHEDULED);
                 break;
@@ -341,10 +348,18 @@ public class PhysicalPlan {
             case SAVEPOINT_DONE:
             case FINISHED:
                 stopJobStateProcess();
-                jobEndFuture.complete(new JobResult(getJobStatus(), errorBySubPlan.get()));
+                jobEndFuture.complete(new JobResult(jobStatus, errorBySubPlan.get()));
+                jobMaster
+                        .getCoordinatorService()
+                        .getEventProcessor()
+                        .process(
+                                new JobStateEvent(
+                                        jobImmutableInformation.getJobId(),
+                                        jobImmutableInformation.getJobConfig().getName(),
+                                        jobStatus));
                 return;
             default:
-                throw new IllegalArgumentException("Unknown Job State: " + getJobStatus());
+                throw new IllegalArgumentException("Unknown Job State: " + jobStatus);
         }
     }
 

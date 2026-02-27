@@ -18,6 +18,7 @@
 package org.apache.seatunnel.core.starter.spark;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.common.PluginIdentifier;
 import org.apache.seatunnel.api.options.EnvCommonOptions;
@@ -32,8 +33,6 @@ import org.apache.seatunnel.core.starter.utils.CompressionUtils;
 import org.apache.seatunnel.core.starter.utils.ConfigBuilder;
 import org.apache.seatunnel.plugin.discovery.seatunnel.SeaTunnelSinkPluginDiscovery;
 import org.apache.seatunnel.plugin.discovery.seatunnel.SeaTunnelSourcePluginDiscovery;
-
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -111,7 +110,6 @@ public class SparkStarter implements Starter {
         setSparkConf();
         Common.setDeployMode(commandArgs.getDeployMode());
         Common.setStarter(true);
-        this.jars.addAll(Common.getPluginsJarDependencies());
         this.jars.addAll(Common.getLibJars());
         this.jars.addAll(getConnectorJarDependencies());
         this.jars.addAll(
@@ -152,13 +150,19 @@ public class SparkStarter implements Starter {
         SeaTunnelSinkPluginDiscovery seaTunnelSinkPluginDiscovery =
                 new SeaTunnelSinkPluginDiscovery();
         pluginJars.addAll(
-                seaTunnelSourcePluginDiscovery.getPluginJarPaths(
+                seaTunnelSourcePluginDiscovery.getPluginJarAndDependencyPaths(
                         getPluginIdentifiers(config, PluginType.SOURCE)));
+        if (config.hasPath(PluginType.TRANSFORM.getType())) {
+            pluginJars.addAll(
+                    seaTunnelSinkPluginDiscovery.getPluginJarAndDependencyPaths(
+                            getPluginIdentifiers(config, PluginType.TRANSFORM)));
+        }
         pluginJars.addAll(
-                seaTunnelSinkPluginDiscovery.getPluginJarPaths(
+                seaTunnelSinkPluginDiscovery.getPluginJarAndDependencyPaths(
                         getPluginIdentifiers(config, PluginType.SINK)));
         return pluginJars.stream()
                 .map(url -> new File(url.getPath()).toPath())
+                .distinct()
                 .collect(Collectors.toList());
     }
 

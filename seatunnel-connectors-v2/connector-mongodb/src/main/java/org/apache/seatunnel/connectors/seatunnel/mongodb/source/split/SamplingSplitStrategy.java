@@ -20,10 +20,9 @@ package org.apache.seatunnel.connectors.seatunnel.mongodb.source.split;
 import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 import org.apache.seatunnel.shade.com.google.common.base.Preconditions;
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.ImmutablePair;
 
 import org.apache.seatunnel.connectors.seatunnel.mongodb.internal.MongodbClientProvider;
-
-import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import org.bson.BsonDocument;
 import org.bson.BsonString;
@@ -75,6 +74,19 @@ public class SamplingSplitStrategy implements MongoSplitStrategy, Serializable {
         ImmutablePair<Long, Long> numAndAvgSize = getDocumentNumAndAvgSize();
         long count = numAndAvgSize.getLeft();
         long avgSize = numAndAvgSize.getRight();
+
+        // Handle the case when avgSize is 0 to prevent division by zero
+        if (avgSize <= 0) {
+            // If there are documents in the collection, return a single split
+            if (count > 0) {
+                return Lists.newArrayList(
+                        MongoSplitUtils.createMongoSplit(
+                                0, matchQuery, projection, splitKey, null, null));
+            } else {
+                // If there are no documents, return an empty list
+                return Lists.newArrayList();
+            }
+        }
 
         long numDocumentsPerSplit = sizePerSplit / avgSize;
         int numSplits = (int) Math.ceil((double) count / numDocumentsPerSplit);

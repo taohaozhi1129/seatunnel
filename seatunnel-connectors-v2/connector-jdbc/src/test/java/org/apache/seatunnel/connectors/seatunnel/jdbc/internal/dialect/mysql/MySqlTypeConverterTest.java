@@ -82,6 +82,11 @@ public class MySqlTypeConverterTest {
         Assertions.assertEquals(typeDefine.getName(), column.getName());
         Assertions.assertEquals(BasicType.BOOLEAN_TYPE, column.getDataType());
         Assertions.assertEquals(typeDefine.getColumnType(), column.getSourceType());
+        MySqlTypeConverter typeMapper = new MySqlTypeConverter(MySqlVersion.V_8, false);
+        column = typeMapper.convert(typeDefine);
+        Assertions.assertEquals(typeDefine.getName(), column.getName());
+        Assertions.assertEquals(PrimitiveByteArrayType.INSTANCE, column.getDataType());
+        Assertions.assertEquals(typeDefine.getColumnType(), column.getSourceType());
 
         typeDefine =
                 BasicTypeDefine.builder()
@@ -1081,5 +1086,21 @@ public class MySqlTypeConverterTest {
         Assertions.assertEquals(MysqlType.DATETIME, typeDefine.getNativeType());
         Assertions.assertEquals(MySqlTypeConverter.MYSQL_DATETIME, typeDefine.getColumnType());
         Assertions.assertEquals(MySqlTypeConverter.MYSQL_DATETIME, typeDefine.getDataType());
+    }
+
+    @Test
+    public void testConvertSet() {
+        BasicTypeDefine<Object> typeDefine =
+                BasicTypeDefine.builder()
+                        .name("test")
+                        .columnType("SET('reading','sports','music','travel')")
+                        .dataType("SET")
+                        .length(3L)
+                        .build();
+        Column column = MySqlTypeConverter.DEFAULT_INSTANCE.convert(typeDefine);
+        Assertions.assertEquals(typeDefine.getName(), column.getName());
+        Assertions.assertEquals(BasicType.STRING_TYPE, column.getDataType());
+        Assertions.assertEquals(3, column.getColumnLength());
+        Assertions.assertEquals(typeDefine.getColumnType(), column.getSourceType());
     }
 }

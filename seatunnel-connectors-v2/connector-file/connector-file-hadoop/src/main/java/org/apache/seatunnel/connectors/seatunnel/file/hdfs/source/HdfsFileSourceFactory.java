@@ -20,19 +20,31 @@ package org.apache.seatunnel.connectors.seatunnel.file.hdfs.source;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
+import org.apache.seatunnel.api.source.SourceSplit;
+import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
+import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileBaseSourceOptions;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileFormat;
+import org.apache.seatunnel.connectors.seatunnel.file.config.FileSyncMode;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileSystemType;
 import org.apache.seatunnel.connectors.seatunnel.file.hdfs.source.config.HdfsSourceConfigOptions;
 
 import com.google.auto.service.AutoService;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 @AutoService(Factory.class)
 public class HdfsFileSourceFactory implements TableSourceFactory {
+
+    @Override
+    public <T, SplitT extends SourceSplit, StateT extends Serializable>
+            TableSource<T, SplitT, StateT> createSource(TableSourceFactoryContext context) {
+        return () -> (SeaTunnelSource<T, SplitT, StateT>) new HdfsFileSource(context.getOptions());
+    }
+
     @Override
     public String factoryIdentifier() {
         return FileSystemType.HDFS.getFileSystemPluginName();
@@ -41,12 +53,13 @@ public class HdfsFileSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .required(HdfsSourceConfigOptions.FILE_PATH)
-                .required(HdfsSourceConfigOptions.DEFAULT_FS)
-                .required(FileBaseSourceOptions.FILE_FORMAT_TYPE)
+                .exclusive(HdfsSourceConfigOptions.TABLE_CONFIGS, HdfsSourceConfigOptions.FILE_PATH)
+                .optional(HdfsSourceConfigOptions.DEFAULT_FS)
+                .optional(FileBaseSourceOptions.FILE_FORMAT_TYPE)
                 .conditional(
                         FileBaseSourceOptions.FILE_FORMAT_TYPE,
                         FileFormat.TEXT,
+                        FileBaseSourceOptions.ROW_DELIMITER,
                         FileBaseSourceOptions.FIELD_DELIMITER,
                         FileBaseSourceOptions.SKIP_HEADER_ROW_NUMBER)
                 .conditional(
@@ -72,21 +85,44 @@ public class HdfsFileSourceFactory implements TableSourceFactory {
                         Arrays.asList(
                                 FileFormat.TEXT, FileFormat.JSON, FileFormat.CSV, FileFormat.XML),
                         FileBaseSourceOptions.ENCODING)
+                .conditional(
+                        FileBaseSourceOptions.FILE_FORMAT_TYPE,
+                        Arrays.asList(
+                                FileFormat.TEXT,
+                                FileFormat.JSON,
+                                FileFormat.CSV,
+                                FileFormat.PARQUET),
+                        FileBaseSourceOptions.ENABLE_FILE_SPLIT)
+                .conditional(
+                        FileBaseSourceOptions.ENABLE_FILE_SPLIT,
+                        Boolean.TRUE,
+                        FileBaseSourceOptions.FILE_SPLIT_SIZE)
                 .optional(FileBaseSourceOptions.PARSE_PARTITION_FROM_PATH)
-                .optional(FileBaseSourceOptions.DATE_FORMAT)
-                .optional(FileBaseSourceOptions.DATETIME_FORMAT)
-                .optional(FileBaseSourceOptions.TIME_FORMAT)
+                .optional(FileBaseSourceOptions.DATE_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.DATETIME_FORMAT_LEGACY)
+                .optional(FileBaseSourceOptions.TIME_FORMAT_LEGACY)
                 .optional(FileBaseSourceOptions.FILE_FILTER_PATTERN)
                 .optional(FileBaseSourceOptions.COMPRESS_CODEC)
                 .optional(FileBaseSourceOptions.ARCHIVE_COMPRESS_CODEC)
                 .optional(FileBaseSourceOptions.NULL_FORMAT)
                 .optional(FileBaseSourceOptions.FILENAME_EXTENSION)
                 .optional(FileBaseSourceOptions.READ_COLUMNS)
+                .optional(
+                        FileBaseSourceOptions.SYNC_MODE,
+                        FileBaseSourceOptions.TARGET_HADOOP_CONF,
+                        FileBaseSourceOptions.UPDATE_STRATEGY,
+                        FileBaseSourceOptions.COMPARE_MODE)
+                .conditional(
+                        FileBaseSourceOptions.SYNC_MODE,
+                        FileSyncMode.UPDATE,
+                        FileBaseSourceOptions.TARGET_PATH)
                 .optional(FileBaseSourceOptions.HDFS_SITE_PATH)
                 .optional(FileBaseSourceOptions.KERBEROS_PRINCIPAL)
                 .optional(FileBaseSourceOptions.KERBEROS_KEYTAB_PATH)
                 .optional(FileBaseSourceOptions.KRB5_PATH)
                 .optional(FileBaseSourceOptions.REMOTE_USER)
+                .optional(FileBaseSourceOptions.QUOTE_CHAR)
+                .optional(FileBaseSourceOptions.ESCAPE_CHAR)
                 .build();
     }
 

@@ -236,6 +236,21 @@ public class DorisTypeConvertorV2Test {
         Assertions.assertEquals(38L, column.getColumnLength());
         Assertions.assertEquals(2, column.getScale());
         Assertions.assertEquals(typeDefine.getColumnType(), column.getSourceType());
+
+        typeDefine =
+                BasicTypeDefine.builder()
+                        .name("test")
+                        .columnType("decimalv3(8,0)")
+                        .dataType("decimal")
+                        .precision(8L)
+                        .scale(0)
+                        .build();
+        column = DorisTypeConverterV2.INSTANCE.convert(typeDefine);
+        Assertions.assertEquals(typeDefine.getName(), column.getName());
+        Assertions.assertEquals(new DecimalType(8, 0), column.getDataType());
+        Assertions.assertEquals(8L, column.getColumnLength());
+        Assertions.assertEquals(0, column.getScale());
+        Assertions.assertEquals(typeDefine.getColumnType(), column.getSourceType());
     }
 
     @Test
@@ -1233,5 +1248,49 @@ public class DorisTypeConvertorV2Test {
         Assertions.assertEquals(column.getName(), typeDefine.getName());
         Assertions.assertEquals("MAP<DATETIME(6), STRING>", typeDefine.getColumnType());
         Assertions.assertEquals("MAP<DATETIME(6), STRING>", typeDefine.getDataType());
+    }
+
+    @Test
+    public void testCaseSensitiveDefault() {
+        BasicTypeDefine<Object> typeDefine =
+                BasicTypeDefine.builder()
+                        .name("Test_Column")
+                        .columnType("varchar(255)")
+                        .dataType("varchar")
+                        .build();
+
+        Column column = DorisTypeConverterV2.INSTANCE.convert(typeDefine);
+        Assertions.assertEquals("Test_Column", column.getName());
+    }
+
+    @Test
+    public void testCaseSensitiveFalse() {
+        BasicTypeDefine<Object> typeDefine =
+                BasicTypeDefine.builder()
+                        .name("Test_Column")
+                        .columnType("varchar(255)")
+                        .dataType("varchar")
+                        .build();
+
+        Column column = DorisTypeConverterV2.INSTANCE.convert(typeDefine, false);
+        Assertions.assertEquals("test_column", column.getName());
+    }
+
+    @Test
+    public void testCaseSensitiveWithMixedCaseTypes() {
+        BasicTypeDefine<Object> typeDefine =
+                BasicTypeDefine.builder()
+                        .name("mixed_case_column")
+                        .columnType("VarChar(255)")
+                        .dataType("VARCHAR")
+                        .build();
+
+        Column columnSensitive = DorisTypeConverterV2.INSTANCE.convert(typeDefine, true);
+        Assertions.assertEquals("mixed_case_column", columnSensitive.getName());
+        Assertions.assertEquals(BasicType.STRING_TYPE, columnSensitive.getDataType());
+
+        Column columnInsensitive = DorisTypeConverterV2.INSTANCE.convert(typeDefine, false);
+        Assertions.assertEquals("mixed_case_column", columnInsensitive.getName());
+        Assertions.assertEquals(BasicType.STRING_TYPE, columnInsensitive.getDataType());
     }
 }

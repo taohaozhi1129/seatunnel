@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
@@ -30,10 +32,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceOptio
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
-
-import org.apache.curator.shaded.com.google.common.collect.Lists;
-
-import org.codehaus.plexus.util.StringUtils;
 
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.GetLoadStateResponse;
@@ -52,6 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -186,7 +185,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                         .withDatabaseName(tablePath.getDatabaseName())
                         .withCollectionName(tablePath.getTableName())
                         .withExpr("")
-                        .withOutFields(Lists.newArrayList("count(*)"));
+                        .withOutFields(Arrays.asList("count(*)"));
 
         if (StringUtils.isNotEmpty(partitionName)) {
             queryParam.withPartitionNames(Collections.singletonList(partitionName));
@@ -221,7 +220,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     QueryIteratorParam.newBuilder()
                             .withDatabaseName(tablePath.getDatabaseName())
                             .withCollectionName(tablePath.getTableName())
-                            .withOutFields(Lists.newArrayList("*"))
+                            .withOutFields(Arrays.asList("*"))
                             .withBatchSize(batchSize);
 
             if (StringUtils.isNotEmpty(partitionName)) {

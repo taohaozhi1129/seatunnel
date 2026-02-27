@@ -22,6 +22,7 @@ package org.apache.seatunnel.config.sql;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 import org.apache.seatunnel.shade.com.typesafe.config.ConfigFactory;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.common.utils.ParserException;
 import org.apache.seatunnel.config.sql.model.BaseConfig;
@@ -30,8 +31,6 @@ import org.apache.seatunnel.config.sql.model.SeaTunnelConfig;
 import org.apache.seatunnel.config.sql.model.SinkConfig;
 import org.apache.seatunnel.config.sql.model.SourceConfig;
 import org.apache.seatunnel.config.sql.model.TransformConfig;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,6 +81,25 @@ public class SqlConfigBuilder {
     public static Config of(@NonNull Path sqlFilePath) {
         try {
             List<String> lines = Files.readAllLines(sqlFilePath);
+            return of(lines);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse job config file: " + sqlFilePath, e);
+        }
+    }
+
+    public static Config of(@NonNull String sqlContent) {
+        try {
+            List<String> lines = new ArrayList<>();
+            String[] lineArray = sqlContent.split("\\r?\\n");
+            Collections.addAll(lines, lineArray);
+            return of(lines);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse job config: ", e);
+        }
+    }
+
+    private static Config of(@NonNull List<String> lines) {
+        try {
             Map<String, BaseConfig> sqlTables = new LinkedHashMap<>();
             SeaTunnelConfig seaTunnelConfig = new SeaTunnelConfig();
 

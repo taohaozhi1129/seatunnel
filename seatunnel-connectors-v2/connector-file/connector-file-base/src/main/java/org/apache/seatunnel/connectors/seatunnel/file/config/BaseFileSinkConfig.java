@@ -18,12 +18,11 @@
 package org.apache.seatunnel.connectors.seatunnel.file.config;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.common.utils.DateTimeUtils;
 import org.apache.seatunnel.common.utils.DateUtils;
 import org.apache.seatunnel.common.utils.TimeUtils;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.Data;
 import lombok.NonNull;
@@ -38,7 +37,8 @@ import static org.apache.seatunnel.shade.com.google.common.base.Preconditions.ch
 public class BaseFileSinkConfig implements DelimiterConfig, Serializable {
     private static final long serialVersionUID = 1L;
     protected CompressFormat compressFormat = FileBaseSinkOptions.COMPRESS_CODEC.defaultValue();
-    protected String fieldDelimiter = FileBaseSinkOptions.FIELD_DELIMITER.defaultValue();
+    protected String fieldDelimiter;
+    protected int sheetMaxRows = FileBaseSinkOptions.SHEET_MAX_ROWS.defaultValue();
     protected String rowDelimiter = FileBaseSinkOptions.ROW_DELIMITER.defaultValue();
     protected int batchSize = FileBaseSinkOptions.BATCH_SIZE.defaultValue();
     protected String path;
@@ -61,10 +61,11 @@ public class BaseFileSinkConfig implements DelimiterConfig, Serializable {
         if (config.hasPath(FileBaseSinkOptions.BATCH_SIZE.key())) {
             this.batchSize = config.getInt(FileBaseSinkOptions.BATCH_SIZE.key());
         }
-        if (config.hasPath(FileBaseSinkOptions.FIELD_DELIMITER.key())
+
+        if (config.hasPath(FileBaseSinkOptions.SHEET_MAX_ROWS.key())
                 && StringUtils.isNotEmpty(
-                        config.getString(FileBaseSinkOptions.FIELD_DELIMITER.key()))) {
-            this.fieldDelimiter = config.getString(FileBaseSinkOptions.FIELD_DELIMITER.key());
+                        config.getString(FileBaseSinkOptions.SHEET_MAX_ROWS.key()))) {
+            this.sheetMaxRows = config.getInt(FileBaseSinkOptions.SHEET_MAX_ROWS.key());
         }
 
         if (config.hasPath(FileBaseSinkOptions.ROW_DELIMITER.key())) {
@@ -109,28 +110,40 @@ public class BaseFileSinkConfig implements DelimiterConfig, Serializable {
             this.fileFormat = FileBaseSinkOptions.FILE_FORMAT_TYPE.defaultValue();
         }
 
+        if (config.hasPath(FileBaseSinkOptions.FIELD_DELIMITER.key())
+                && StringUtils.isNotEmpty(
+                        config.getString(FileBaseSinkOptions.FIELD_DELIMITER.key()))) {
+            this.fieldDelimiter = config.getString(FileBaseSinkOptions.FIELD_DELIMITER.key());
+        } else {
+            if (FileFormat.CSV.equals(this.fileFormat)) {
+                this.fieldDelimiter = ",";
+            } else {
+                this.fieldDelimiter = FileBaseSinkOptions.FIELD_DELIMITER.defaultValue();
+            }
+        }
+
         if (config.hasPath(FileBaseSinkOptions.FILENAME_EXTENSION.key())
                 && !StringUtils.isBlank(
                         config.getString(FileBaseSinkOptions.FILENAME_EXTENSION.key()))) {
             this.filenameExtension = config.getString(FileBaseSinkOptions.FILENAME_EXTENSION.key());
         }
 
-        if (config.hasPath(FileBaseSinkOptions.DATE_FORMAT.key())) {
+        if (config.hasPath(FileBaseSinkOptions.DATE_FORMAT_LEGACY.key())) {
             dateFormat =
                     DateUtils.Formatter.parse(
-                            config.getString(FileBaseSinkOptions.DATE_FORMAT.key()));
+                            config.getString(FileBaseSinkOptions.DATE_FORMAT_LEGACY.key()));
         }
 
-        if (config.hasPath(FileBaseSinkOptions.DATETIME_FORMAT.key())) {
+        if (config.hasPath(FileBaseSinkOptions.DATETIME_FORMAT_LEGACY.key())) {
             datetimeFormat =
                     DateTimeUtils.Formatter.parse(
-                            config.getString(FileBaseSinkOptions.DATETIME_FORMAT.key()));
+                            config.getString(FileBaseSinkOptions.DATETIME_FORMAT_LEGACY.key()));
         }
 
-        if (config.hasPath(FileBaseSinkOptions.TIME_FORMAT.key())) {
+        if (config.hasPath(FileBaseSinkOptions.TIME_FORMAT_LEGACY.key())) {
             timeFormat =
                     TimeUtils.Formatter.parse(
-                            config.getString(FileBaseSinkOptions.TIME_FORMAT.key()));
+                            config.getString(FileBaseSinkOptions.TIME_FORMAT_LEGACY.key()));
         }
 
         if (config.hasPath(FileBaseSinkOptions.ENABLE_HEADER_WRITE.key())) {

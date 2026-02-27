@@ -177,6 +177,14 @@ public class MultiTableSinkWriter
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        if (element != null && element.getOptions() != null) {
+            if (element.getOptions().containsKey("flush_event")
+                    || element.getOptions().containsKey("schema_change_event")) {
+                log.debug("Skipping schema change event row: {}", element.getOptions().keySet());
+                return;
+            }
+        }
+
         if (!submitted) {
             submitted = true;
             runnable.forEach(executorService::submit);

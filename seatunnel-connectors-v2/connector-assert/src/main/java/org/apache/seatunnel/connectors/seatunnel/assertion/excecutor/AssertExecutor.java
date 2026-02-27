@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.assertion.excecutor;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Iterables;
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.DecimalType;
@@ -31,8 +32,6 @@ import org.apache.seatunnel.common.exception.CommonError;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.assertion.rule.AssertFieldRule;
 import org.apache.seatunnel.format.json.JsonToRowConverters;
-
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -74,6 +73,13 @@ public class AssertExecutor {
                 Iterables.indexOf(
                         Lists.newArrayList(rowType.getFieldNames()),
                         fieldName -> fieldName.equals(assertFieldRule.getFieldName()));
+
+        if (index == -1) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Field name %s not found in row type %s",
+                            assertFieldRule.getFieldName(), rowType));
+        }
 
         SeaTunnelDataType<?> type = rowType.getFieldType(index);
         Object value = rowData.getField(index);

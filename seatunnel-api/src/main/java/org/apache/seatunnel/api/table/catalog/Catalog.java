@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.api.table.catalog;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
@@ -29,8 +31,6 @@ import org.apache.seatunnel.common.exception.CommonError;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.exception.SeaTunnelRuntimeException;
 
-import org.apache.commons.lang3.StringUtils;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Interface for reading and writing table metadata from SeaTunnel. Each connector need to contain
@@ -164,19 +165,42 @@ public interface Catalog extends AutoCloseable {
         Pattern databasePattern =
                 Pattern.compile(config.get(ConnectorCommonOptions.DATABASE_PATTERN));
         Pattern tablePattern = Pattern.compile(config.get(ConnectorCommonOptions.TABLE_PATTERN));
+
         List<String> allDatabase = this.listDatabases();
         allDatabase.removeIf(s -> !databasePattern.matcher(s).matches());
         List<TablePath> tablePaths = new ArrayList<>();
+
         for (String databaseName : allDatabase) {
-            tableNames = this.listTables(databaseName);
-            tableNames.forEach(
-                    tableName -> {
-                        if (tablePattern.matcher(databaseName + "." + tableName).matches()) {
-                            tablePaths.add(TablePath.of(databaseName, tableName));
-                        }
-                    });
+            List<TablePath> paths = this.listTablePaths(databaseName);
+            tablePaths.addAll(
+                    paths.stream()
+                            .filter(
+                                    path ->
+                                            tablePattern
+                                                    .matcher(
+                                                            path.getDatabaseName()
+                                                                    + "."
+                                                                    + path.getSchemaAndTableName())
+                                                    .matches())
+                            .collect(Collectors.toList()));
         }
         return buildCatalogTablesWithErrorCheck(tablePaths.iterator());
+    }
+
+    default List<TablePath> listTablePaths(String databaseName)
+            throws CatalogException, DatabaseNotExistException {
+        List<String> tableNames = listTables(databaseName);
+        return tableNames.stream()
+                .map(
+                        tableName -> {
+                            String[] parts = tableName.split("\\.");
+                            if (parts.length > 1) {
+                                return TablePath.of(databaseName, parts[0], parts[1]);
+                            } else {
+                                return TablePath.of(databaseName, null, tableName);
+                            }
+                        })
+                .collect(Collectors.toList());
     }
 
     default List<CatalogTable> buildCatalogTablesWithErrorCheck(Iterator<TablePath> tablePaths) {

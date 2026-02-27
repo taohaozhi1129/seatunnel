@@ -111,9 +111,13 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
     private static final String SOURCE_TABLE_1 = "postgres_cdc_table_1";
     private static final String SOURCE_TABLE_2 = "postgres_cdc_table_2";
     private static final String SOURCE_TABLE_3 = "postgres_cdc_table_3";
+    private static final String SOURCE_TABLE_4 = "postgres_cdc_table_4";
+    private static final String SOURCE_TABLE_5 = "postgres_cdc_table_5";
     private static final String SINK_TABLE_1 = "sink_postgres_cdc_table_1";
     private static final String SINK_TABLE_2 = "sink_postgres_cdc_table_2";
     private static final String SINK_TABLE_3 = "sink_postgres_cdc_table_3";
+    private static final String SINK_TABLE_4 = "sink_postgres_cdc_table_4";
+    private static final String SINK_TABLE_5 = "sink_postgres_cdc_table_5";
 
     private static final String SOURCE_TABLE_NO_PRIMARY_KEY = "full_types_no_primary_key";
 
@@ -367,6 +371,66 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
             value = {},
             type = {EngineType.SPARK, EngineType.FLINK},
             disabledReason =
+                    "Heartbeat action query is currently only supported by the zeta engine.")
+    public void testMPostgresCdcCheckDataE2eWithHeartbeat(TestContainer container) {
+        executeSql(
+                "CREATE TABLE IF NOT EXISTS "
+                        + POSTGRESQL_SCHEMA
+                        + ".heartbeat ("
+                        + "  ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                        + ");");
+        clearTable(POSTGRESQL_SCHEMA, "heartbeat");
+
+        try {
+            CompletableFuture.supplyAsync(
+                    () -> {
+                        try {
+                            container.executeJob("/postgrescdc_to_postgres_with_heartbeat.conf");
+                        } catch (Exception e) {
+                            log.error("Commit task exception :" + e.getMessage());
+                            throw new RuntimeException(e);
+                        }
+                        return null;
+                    });
+            await().atMost(60000, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> {
+                                Assertions.assertIterableEquals(
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SOURCE_TABLE_1)),
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SINK_TABLE_1)));
+                            });
+
+            // insert update delete
+            upsertDeleteSourceTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_1);
+
+            // stream stage
+            await().atMost(60000, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> {
+                                Assertions.assertIterableEquals(
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SOURCE_TABLE_1)),
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SINK_TABLE_1)));
+                            });
+
+            await().atMost(10000, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> {
+                                List<List<Object>> query =
+                                        query("SELECT * FROM " + POSTGRESQL_SCHEMA + ".heartbeat");
+                                Assertions.assertFalse(query.isEmpty());
+                            });
+        } finally {
+            // Clear related content to ensure that multiple operations are not affected
+            clearTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_1);
+            clearTable(POSTGRESQL_SCHEMA, SINK_TABLE_1);
+        }
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason =
                     "This case requires obtaining the task health status and manually canceling the canceled task, which is currently only supported by the zeta engine.")
     public void testMPostgresCdcMetadataTrans(TestContainer container) throws InterruptedException {
 
@@ -593,7 +657,7 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
             value = {},
             type = {EngineType.SPARK, EngineType.FLINK},
             disabledReason = "Currently SPARK and FLINK do not support restore")
-    public void testAddFiledWithRestore(TestContainer container)
+    public void testAddFieldWithRestore(TestContainer container)
             throws IOException, InterruptedException {
         Long jobId = JobIdGenerator.newJobId();
         try {
@@ -627,7 +691,7 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
 
             Assertions.assertEquals(0, container.savepointJob(String.valueOf(jobId)).getExitCode());
 
-            // add filed add insert source table data
+            // add field add insert source table data
             addFieldsForTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_3);
             addFieldsForTable(POSTGRESQL_SCHEMA, SINK_TABLE_3);
             insertSourceTableForAddFields(POSTGRESQL_SCHEMA, SOURCE_TABLE_3);
@@ -768,6 +832,66 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
         } finally {
             clearTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_NO_PRIMARY_KEY);
             clearTable(POSTGRESQL_SCHEMA, SINK_TABLE_1);
+        }
+    }
+
+    @TestTemplate
+    public void testPostgresCdcCheckDataWithIntervalDataType(TestContainer container)
+            throws Exception {
+
+        try {
+            CompletableFuture.supplyAsync(
+                    () -> {
+                        try {
+                            container.executeJob(
+                                    "/postgrescdc_to_postgres_with_interval_data_type.conf");
+                        } catch (Exception e) {
+                            log.error("Commit task exception :" + e.getMessage());
+                            throw new RuntimeException(e);
+                        }
+                        return null;
+                    });
+
+            // stream stage
+            await().atMost(60000, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> {
+                                Assertions.assertIterableEquals(
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SOURCE_TABLE_4)),
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SINK_TABLE_4)));
+                            });
+        } finally {
+            clearTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_4);
+            clearTable(POSTGRESQL_SCHEMA, SINK_TABLE_4);
+        }
+    }
+
+    @TestTemplate
+    public void testPostgresCdcCheckDataWithNetworkAddressTypes(TestContainer container) {
+        try {
+            CompletableFuture.supplyAsync(
+                    () -> {
+                        try {
+                            container.executeJob(
+                                    "/postgrescdc_to_postgres_with_network_address_types.conf");
+                        } catch (Exception e) {
+                            log.error("Commit task exception :" + e.getMessage());
+                            throw new RuntimeException(e);
+                        }
+                        return null;
+                    });
+
+            // stream stage
+            await().atMost(60000, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> {
+                                Assertions.assertIterableEquals(
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SOURCE_TABLE_5)),
+                                        query(getQuerySQL(POSTGRESQL_SCHEMA, SINK_TABLE_5)));
+                            });
+        } finally {
+            clearTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_5);
+            clearTable(POSTGRESQL_SCHEMA, SINK_TABLE_5);
         }
     }
 

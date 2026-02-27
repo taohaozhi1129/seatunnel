@@ -17,8 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.paimon.config;
 
-import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 import org.apache.seatunnel.shade.com.google.common.collect.ImmutableList;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
@@ -26,8 +26,6 @@ import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.common.exception.CommonError;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.paimon.catalog.PaimonCatalogEnum;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.Getter;
 
@@ -54,6 +52,8 @@ public class PaimonConfig implements Serializable {
     protected String hdfsSitePath;
     protected Map<String, String> hadoopConfProps;
     protected String hadoopConfPath;
+    protected String user;
+    protected String password;
 
     public PaimonConfig(ReadonlyConfig readonlyConfig) {
         this.catalogName =
@@ -64,13 +64,8 @@ public class PaimonConfig implements Serializable {
                 checkArgumentNotBlank(
                         readonlyConfig.get(PaimonBaseOptions.WAREHOUSE),
                         PaimonBaseOptions.WAREHOUSE.key());
-        this.namespace =
-                checkArgumentNotBlank(
-                        readonlyConfig.get(PaimonBaseOptions.DATABASE),
-                        PaimonBaseOptions.DATABASE.key());
-        this.table =
-                checkArgumentNotBlank(
-                        readonlyConfig.get(PaimonBaseOptions.TABLE), PaimonBaseOptions.TABLE.key());
+        this.namespace = readonlyConfig.get(PaimonBaseOptions.DATABASE);
+        this.table = readonlyConfig.get(PaimonBaseOptions.TABLE);
         this.hdfsSitePath = readonlyConfig.get(PaimonBaseOptions.HDFS_SITE_PATH);
         this.hadoopConfProps = readonlyConfig.get(PaimonBaseOptions.HADOOP_CONF);
         this.hadoopConfPath = readonlyConfig.get(PaimonBaseOptions.HADOOP_CONF_PATH);
@@ -81,6 +76,8 @@ public class PaimonConfig implements Serializable {
                             readonlyConfig.get(PaimonBaseOptions.CATALOG_URI),
                             PaimonBaseOptions.CATALOG_URI.key());
         }
+        this.user = readonlyConfig.get(PaimonBaseOptions.USER);
+        this.password = readonlyConfig.get(PaimonBaseOptions.PASSWORD);
     }
 
     protected String checkArgumentNotBlank(String propValue, String propKey) {
@@ -91,8 +88,7 @@ public class PaimonConfig implements Serializable {
         return propValue;
     }
 
-    @VisibleForTesting
-    public static List<String> stringToList(String value, String regex) {
+    protected static List<String> stringToList(String value, String regex) {
         if (value == null || value.isEmpty()) {
             return ImmutableList.of();
         }

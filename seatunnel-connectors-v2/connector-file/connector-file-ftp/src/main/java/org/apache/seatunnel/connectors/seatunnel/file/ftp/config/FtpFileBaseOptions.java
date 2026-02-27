@@ -44,4 +44,16 @@ public class FtpFileBaseOptions extends FileBaseOptions {
                     .enumType(FtpConnectionMode.class)
                     .defaultValue(ACTIVE_LOCAL)
                     .withDescription("FTP server connection mode ");
+    public static final Option<Boolean> FTP_REMOTE_VERIFICATION_ENABLED =
+            Options.key("remote_verification_enabled")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            "Whether to enable remote host verification for FTP data channels (enabled by default)");
+    public static final Option<String> FTP_CONTROL_ENCODING =
+            Options.key("control_encoding")
+                    .stringType()
+                    .defaultValue("UTF-8")
+                    .withDescription(
+                            "Character encoding for FTP control connection. Use UTF-8 to support special characters in file paths");
 }

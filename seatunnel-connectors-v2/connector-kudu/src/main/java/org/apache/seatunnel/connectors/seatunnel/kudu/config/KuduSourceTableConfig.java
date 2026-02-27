@@ -17,8 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.kudu.config;
 
-import org.apache.seatunnel.shade.com.google.common.collect.Lists;
-
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
 import org.apache.seatunnel.api.table.catalog.Catalog;
@@ -32,8 +30,10 @@ import org.apache.seatunnel.connectors.seatunnel.kudu.catalog.KuduCatalogFactory
 import lombok.Getter;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Getter
@@ -45,9 +45,10 @@ public class KuduSourceTableConfig implements Serializable {
 
     private String filter;
 
-    private KuduSourceTableConfig(String tablePath, CatalogTable catalogTable) {
+    private KuduSourceTableConfig(String tablePath, CatalogTable catalogTable, String filter) {
         this.tablePath = TablePath.of(tablePath);
         this.catalogTable = catalogTable;
+        this.filter = filter;
     }
 
     public static List<KuduSourceTableConfig> of(ReadonlyConfig config) {
@@ -60,15 +61,28 @@ public class KuduSourceTableConfig implements Serializable {
 
         try (KuduCatalog kuduCatalog = (KuduCatalog) optionalCatalog.get()) {
             kuduCatalog.open();
+
+            List<ReadonlyConfig> tableConfigs = new ArrayList<>();
             if (config.getOptional(ConnectorCommonOptions.TABLE_LIST).isPresent()) {
-                return config.get(ConnectorCommonOptions.TABLE_LIST).stream()
-                        .map(ReadonlyConfig::fromMap)
-                        .map(readonlyConfig -> parseKuduSourceConfig(readonlyConfig, kuduCatalog))
-                        .collect(Collectors.toList());
+                tableConfigs =
+                        config.get(ConnectorCommonOptions.TABLE_LIST).stream()
+                                .map(ReadonlyConfig::fromMap)
+                                .collect(Collectors.toList());
+            } else {
+                tableConfigs.add(config);
             }
-            KuduSourceTableConfig kuduSourceTableConfig =
-                    parseKuduSourceConfig(config, kuduCatalog);
-            return Lists.newArrayList(kuduSourceTableConfig);
+
+            List<KuduSourceTableConfig> result = new ArrayList<>();
+            for (ReadonlyConfig tableConfig : tableConfigs) {
+                Boolean useRegex = tableConfig.get(KuduSourceOptions.USE_REGEX);
+                if (useRegex != null && useRegex) {
+                    result.addAll(parseKuduSourceConfigWithRegex(tableConfig, kuduCatalog));
+                } else {
+                    result.add(parseKuduSourceConfig(tableConfig, kuduCatalog));
+                }
+            }
+
+            return result;
         }
     }
 
@@ -82,6 +96,33 @@ public class KuduSourceTableConfig implements Serializable {
             catalogTable =
                     kuduCatalog.getTable(TablePath.of(config.get(KuduBaseOptions.TABLE_NAME)));
         }
-        return new KuduSourceTableConfig(tableName, catalogTable);
+        return new KuduSourceTableConfig(
+                tableName, catalogTable, config.get(KuduSourceOptions.FILTER));
+    }
+
+    static List<KuduSourceTableConfig> parseKuduSourceConfigWithRegex(
+            ReadonlyConfig config, KuduCatalog kuduCatalog) {
+        String patternString = config.get(KuduBaseOptions.TABLE_NAME);
+        if (patternString == null) {
+            throw new IllegalArgumentException(
+                    "When `use_regex` is enabled, `table_name` must be configured");
+        }
+
+        Pattern pattern = Pattern.compile(patternString);
+
+        List<String> allTables =
+                kuduCatalog.listTables(kuduCatalog.getDefaultDatabase()).stream()
+                        .filter(tableName -> pattern.matcher(tableName).matches())
+                        .collect(Collectors.toList());
+
+        List<KuduSourceTableConfig> result = new ArrayList<>();
+        for (String tableName : allTables) {
+            CatalogTable catalogTable = kuduCatalog.getTable(TablePath.of(tableName));
+            result.add(
+                    new KuduSourceTableConfig(
+                            tableName, catalogTable, config.get(KuduSourceOptions.FILTER)));
+        }
+
+        return result;
     }
 }

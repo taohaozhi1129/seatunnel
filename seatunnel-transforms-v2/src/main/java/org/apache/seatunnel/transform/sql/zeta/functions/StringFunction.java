@@ -17,7 +17,11 @@
 
 package org.apache.seatunnel.transform.sql.zeta.functions;
 
-import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
+import org.apache.seatunnel.shade.com.google.common.hash.Hashing;
+
+import org.apache.seatunnel.common.exception.CommonErrorCode;
+import org.apache.seatunnel.common.utils.DateTimeUtils;
+import org.apache.seatunnel.common.utils.DateUtils;
 import org.apache.seatunnel.transform.exception.TransformException;
 import org.apache.seatunnel.transform.sql.zeta.ZetaSQLFunction;
 
@@ -25,10 +29,17 @@ import org.apache.groovy.parser.antlr4.util.StringUtils;
 
 import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,7 +52,7 @@ public class StringFunction {
 
     public static Integer ascii(List<Object> args) {
         String arg = (String) args.get(0);
-        if (arg == null) {
+        if (arg == null || arg.isEmpty()) {
             return null;
         } else {
             return (int) arg.charAt(0);
@@ -136,9 +147,10 @@ public class StringFunction {
         }
         int len = arg.length();
         if (len % 4 != 0) {
-            throw new TransformException(
-                    CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
-                    String.format("Unsupported arg for function: %s", ZetaSQLFunction.HEXTORAW));
+            Map<String, String> params = new HashMap<>();
+            params.put("argument", arg);
+            params.put("operation", ZetaSQLFunction.HEXTORAW);
+            throw new TransformException(CommonErrorCode.ILLEGAL_ARGUMENT, params);
         }
         StringBuilder builder = new StringBuilder(len / 4);
         for (int i = 0; i < len; i += 4) {
@@ -222,6 +234,9 @@ public class StringFunction {
             return null;
         }
         int count = ((Number) args.get(1)).intValue();
+        if (count < 0) {
+            return "";
+        }
         if (count > arg.length()) {
             count = arg.length();
         }
@@ -234,6 +249,9 @@ public class StringFunction {
             return null;
         }
         int count = ((Number) args.get(1)).intValue();
+        if (count < 0) {
+            return "";
+        }
         int length = arg.length();
         if (count > length) {
             count = length;
@@ -403,7 +421,7 @@ public class StringFunction {
             int position,
             int occurrence,
             String regexpMode) {
-        int flags = makeRegexpFlags(regexpMode, false);
+        int flags = makeRegexpFlags(regexpMode, false, ZetaSQLFunction.REGEXP_REPLACE);
         Matcher matcher =
                 Pattern.compile(regexp, flags).matcher(input).region(position - 1, input.length());
         if (occurrence == 0) {
@@ -433,11 +451,12 @@ public class StringFunction {
         if (args.size() >= 3) {
             regexpMode = (String) args.get(2);
         }
-        int flags = makeRegexpFlags(regexpMode, false);
+        int flags = makeRegexpFlags(regexpMode, false, ZetaSQLFunction.REGEXP_LIKE);
         return Pattern.compile(regexp, flags).matcher(input).find();
     }
 
-    private static int makeRegexpFlags(String stringFlags, boolean ignoreGlobalFlag) {
+    private static int makeRegexpFlags(
+            String stringFlags, boolean ignoreGlobalFlag, String functionName) {
         int flags = Pattern.UNICODE_CASE;
         if (stringFlags != null) {
             for (int i = 0; i < stringFlags.length(); ++i) {
@@ -460,11 +479,10 @@ public class StringFunction {
                         }
                         // $FALL-THROUGH$
                     default:
-                        throw new TransformException(
-                                CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
-                                String.format(
-                                        "Unsupported regexpMode arg: %s for function: %s",
-                                        flags, ZetaSQLFunction.HEXTORAW));
+                        Map<String, String> params = new HashMap<>();
+                        params.put("argument", stringFlags);
+                        params.put("operation", functionName);
+                        throw new TransformException(CommonErrorCode.ILLEGAL_ARGUMENT, params);
                 }
             }
         }
@@ -511,7 +529,7 @@ public class StringFunction {
         int position = positionArg != null ? positionArg - 1 : 0;
         int requestedOccurrence = occurrenceArg != null ? occurrenceArg : 1;
         int subexpression = subexpressionArg != null ? subexpressionArg : 0;
-        int flags = makeRegexpFlags(regexpMode, false);
+        int flags = makeRegexpFlags(regexpMode, false, ZetaSQLFunction.REGEXP_SUBSTR);
         Matcher m = Pattern.compile(regexp, flags).matcher(input);
 
         boolean found = m.find(position);
@@ -623,11 +641,74 @@ public class StringFunction {
         return new String(chars, StandardCharsets.ISO_8859_1);
     }
 
-    public static String substring(List<Object> args) {
-        String s = (String) args.get(0);
-        if (s == null) {
+    /**
+     * Convert date/time objects to standardized string format
+     *
+     * @param obj the object to convert
+     * @return standardized string representation of the date/time object
+     */
+    private static String convertDateToString(Object obj) {
+        if (obj == null) {
             return null;
         }
+
+        // Handle java.util.Date and subclasses (java.sql.Date, java.sql.Timestamp)
+        if (obj instanceof Date) {
+            Date date = (Date) obj;
+            LocalDateTime localDateTime = LocalDateTime.ofInstant(date.toInstant(), ZoneOffset.UTC);
+            return DateTimeUtils.toString(
+                    localDateTime, DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS);
+        }
+
+        // Handle java.time types
+        if (obj instanceof LocalDate) {
+            LocalDate localDate = (LocalDate) obj;
+            return DateUtils.toString(localDate, DateUtils.Formatter.YYYY_MM_DD);
+        }
+
+        if (obj instanceof LocalDateTime) {
+            LocalDateTime localDateTime = (LocalDateTime) obj;
+            return DateTimeUtils.toString(
+                    localDateTime, DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS);
+        }
+
+        if (obj instanceof OffsetDateTime) {
+            OffsetDateTime offsetDateTime = (OffsetDateTime) obj;
+            return DateTimeUtils.toString(
+                    offsetDateTime, DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS);
+        }
+
+        // For Temporal objects that are not specifically handled above
+        if (obj instanceof Temporal) {
+            Temporal temporal = (Temporal) obj;
+            try {
+                // Try to format as timestamp first
+                return DateTimeUtils.toString(
+                        temporal, DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS);
+            } catch (Exception e) {
+                try {
+                    // Fallback to date-only format
+                    return DateUtils.toString(temporal, DateUtils.Formatter.YYYY_MM_DD);
+                } catch (Exception ex) {
+                    // If all else fails, use toString
+                    return obj.toString();
+                }
+            }
+        }
+
+        // For non-date objects, convert to string directly
+        return obj.toString();
+    }
+
+    public static String substring(List<Object> args) {
+        Object input = args.get(0);
+        if (input == null) {
+            return null;
+        }
+
+        // Convert date types to standardized string format
+        String s = convertDateToString(input);
+
         int sl = s.length();
         int start = ((Number) args.get(1)).intValue();
         Object v3 = null;
@@ -696,5 +777,19 @@ public class StringFunction {
             }
         }
         return builder == null ? original : builder.toString();
+    }
+
+    /**
+     * Calculate MurmurHash 128 for the input string and return the lower 64 bits as a long value
+     *
+     * @param args List containing the input string
+     * @return Lower 64 bits of MurmurHash 128 as Long, or null if input is null
+     */
+    public static Long murmur64(List<Object> args) {
+        String arg = (String) args.get(0);
+        if (arg == null) {
+            return null;
+        }
+        return Hashing.murmur3_128().hashString(arg, StandardCharsets.UTF_8).asLong();
     }
 }

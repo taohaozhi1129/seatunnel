@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.graphql.source.reader;
 
+import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.graphql.config.GraphQLSourceParameter;
 import org.apache.seatunnel.connectors.seatunnel.http.config.HttpParameter;
 
@@ -24,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.google.gson.Gson;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -96,8 +98,7 @@ public class GraphQLWebSocket {
         @Override
         public void onFailure(
                 @NotNull WebSocket webSocket, @NotNull Throwable t, @Nullable Response response) {
-            log.error("WebSocket connection failed: " + t.getMessage());
-            t.printStackTrace();
+            log.error("WebSocket connection failed", t);
             scheduleReconnect();
         }
 
@@ -106,15 +107,18 @@ public class GraphQLWebSocket {
             try {
                 buffer.put(text);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error("Failed to put message into buffer", e);
+                Thread.currentThread().interrupt();
             }
         }
 
+        @SneakyThrows
         @Override
         public void onOpen(@NotNull WebSocket webSocket, @NotNull Response response) {
             retryCount = 0;
 
-            Map<String, Object> body = httpParameter.getBody();
+            Map<String, Object> body =
+                    JsonUtils.toMap(JsonUtils.stringToJsonNode(httpParameter.getBody()));
 
             String json = gson.toJson(body);
             webSocket.send(json);
@@ -135,7 +139,8 @@ public class GraphQLWebSocket {
                                         Thread.sleep(RETRY_DELAY_MS);
                                         connect();
                                     } catch (InterruptedException e) {
-                                        e.printStackTrace();
+                                        log.error("Reconnection attempt interrupted", e);
+                                        Thread.currentThread().interrupt();
                                     }
                                 })
                         .start();

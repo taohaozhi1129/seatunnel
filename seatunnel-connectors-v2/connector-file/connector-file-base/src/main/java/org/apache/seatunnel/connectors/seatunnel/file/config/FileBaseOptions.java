@@ -20,9 +20,6 @@ package org.apache.seatunnel.connectors.seatunnel.file.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
-import org.apache.seatunnel.common.utils.DateTimeUtils;
-import org.apache.seatunnel.common.utils.DateUtils;
-import org.apache.seatunnel.common.utils.TimeUtils;
 
 import java.util.List;
 
@@ -46,24 +43,6 @@ public class FileBaseOptions extends ConnectorCommonOptions {
                     .stringType()
                     .defaultValue("UTF-8")
                     .withDescription("The encoding of the file, e.g. UTF-8, ISO-8859-1....");
-
-    public static final Option<DateUtils.Formatter> DATE_FORMAT =
-            Options.key("date_format")
-                    .enumType(DateUtils.Formatter.class)
-                    .defaultValue(DateUtils.Formatter.YYYY_MM_DD)
-                    .withDescription("Date format");
-
-    public static final Option<DateTimeUtils.Formatter> DATETIME_FORMAT =
-            Options.key("datetime_format")
-                    .enumType(DateTimeUtils.Formatter.class)
-                    .defaultValue(DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS)
-                    .withDescription("Datetime format");
-
-    public static final Option<TimeUtils.Formatter> TIME_FORMAT =
-            Options.key("time_format")
-                    .enumType(TimeUtils.Formatter.class)
-                    .defaultValue(TimeUtils.Formatter.HH_MM_SS)
-                    .withDescription("Time format");
 
     public static final Option<Boolean> PARSE_PARTITION_FROM_PATH =
             Options.key("parse_partition_from_path")
@@ -171,4 +150,17 @@ public class FileBaseOptions extends ConnectorCommonOptions {
                     .enumType(ArchiveCompressFormat.class)
                     .defaultValue(ArchiveCompressFormat.NONE)
                     .withDescription("Archive compression codec");
+
+    public static final Option<Boolean> ENABLE_FILE_SPLIT =
+            Options.key("enable_file_split")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Turn on the file splitting function, the default is false");
+
+    public static final Option<Long> FILE_SPLIT_SIZE =
+            Options.key("file_split_size")
+                    .longType()
+                    .defaultValue(128 * 1024 * 1024L)
+                    .withDescription(
+                            "File split size, which can be filled in when the enable_file_split parameter is true. The unit is the number of bytes. The default value is the number of bytes of 128MB, which is 128*1024*1024.");
 }

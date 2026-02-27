@@ -17,10 +17,13 @@
 
 package org.apache.seatunnel.connectors.seatunnel.console.sink;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
+import org.apache.seatunnel.api.table.schema.exception.SinkWriterSchemaException;
 import org.apache.seatunnel.api.table.schema.handler.DataTypeChangeEventDispatcher;
 import org.apache.seatunnel.api.table.schema.handler.DataTypeChangeEventHandler;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -30,10 +33,9 @@ import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,14 +67,30 @@ public class ConsoleSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     }
 
     @Override
-    public void applySchemaChange(SchemaChangeEvent event) {
+    public void applySchemaChange(SchemaChangeEvent event) throws IOException {
         log.info("changed rowType before: {}", fieldsInfo(seaTunnelRowType));
-        seaTunnelRowType = dataTypeChangeEventHandler.reset(seaTunnelRowType).apply(event);
-        log.info("changed rowType after: {}", fieldsInfo(seaTunnelRowType));
+        try {
+            seaTunnelRowType = dataTypeChangeEventHandler.reset(seaTunnelRowType).apply(event);
+            log.info("changed rowType after: {}", fieldsInfo(seaTunnelRowType));
+        } catch (Exception e) {
+            log.error(
+                    "ConsoleSinkWriter failed to apply schema change for table: {}",
+                    event.tableIdentifier(),
+                    e);
+            throw SinkWriterSchemaException.applicationFailed(
+                    event.tableIdentifier(),
+                    event.getJobId(),
+                    "Console sink writer schema change application failed",
+                    e);
+        }
     }
 
     @Override
     public void write(SeaTunnelRow element) {
+        if (element.getArity() == 0) {
+            return;
+        }
+
         String[] arr = new String[seaTunnelRowType.getTotalFields()];
         SeaTunnelDataType<?>[] fieldTypes = seaTunnelRowType.getFieldTypes();
         Object[] fields = element.getFields();

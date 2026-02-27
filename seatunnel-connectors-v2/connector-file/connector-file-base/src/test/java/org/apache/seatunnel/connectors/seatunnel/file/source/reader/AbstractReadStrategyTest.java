@@ -17,6 +17,15 @@
 
 package org.apache.seatunnel.connectors.seatunnel.file.source.reader;
 
+import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.com.typesafe.config.ConfigFactory;
+
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.CatalogTableUtil;
+import org.apache.seatunnel.api.table.type.BasicType;
+import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
+import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.connectors.seatunnel.file.config.FileBaseSourceOptions;
 import org.apache.seatunnel.connectors.seatunnel.file.writer.ParquetReadStrategyTest;
 
 import org.apache.avro.Schema;
@@ -25,7 +34,9 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.Seekable;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -35,13 +46,51 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_DEFAULT_NAME_DEFAULT;
 
 public class AbstractReadStrategyTest {
+
+    @Test
+    void testSafeSliceUsesSeekForSeekableStream() throws Exception {
+        byte[] data = "0123456789".getBytes(StandardCharsets.UTF_8);
+        TrackingSeekableInputStream in = new TrackingSeekableInputStream(data);
+
+        try (InputStream sliced = AbstractReadStrategy.safeSlice(in, 5, 3)) {
+            byte[] buffer = new byte[10];
+            int n = sliced.read(buffer);
+            Assertions.assertEquals(3, n);
+            Assertions.assertEquals("567", new String(buffer, 0, n, StandardCharsets.UTF_8));
+            Assertions.assertTrue(in.seekCalled);
+        }
+    }
+
+    @Test
+    void testSafeSliceReadsToEndWhenLengthIsNegative() throws Exception {
+        byte[] data = "0123456789".getBytes(StandardCharsets.UTF_8);
+        TrackingSeekableInputStream in = new TrackingSeekableInputStream(data);
+
+        try (InputStream sliced = AbstractReadStrategy.safeSlice(in, 5, -1)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4];
+            int n;
+            while ((n = sliced.read(buffer)) != -1) {
+                out.write(buffer, 0, n);
+            }
+            Assertions.assertEquals("56789", new String(out.toByteArray(), StandardCharsets.UTF_8));
+            Assertions.assertTrue(in.seekCalled);
+        }
+    }
 
     @DisabledOnOs(OS.WINDOWS)
     @Test
@@ -130,5 +179,250 @@ public class AbstractReadStrategyTest {
                 }
             }
         }
+    }
+
+    private static class TrackingSeekableInputStream extends InputStream implements Seekable {
+        private final byte[] data;
+        private int pos;
+        private boolean seekCalled;
+
+        private TrackingSeekableInputStream(byte[] data) {
+            this.data = data;
+            this.pos = 0;
+        }
+
+        @Override
+        public int read() {
+            if (pos >= data.length) {
+                return -1;
+            }
+            return data[pos++] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            if (pos >= data.length) {
+                return -1;
+            }
+            int toRead = Math.min(len, data.length - pos);
+            System.arraycopy(data, pos, b, off, toRead);
+            pos += toRead;
+            return toRead;
+        }
+
+        @Override
+        public void seek(long newPos) {
+            this.seekCalled = true;
+            this.pos = (int) newPos;
+        }
+
+        @Override
+        public long getPos() {
+            return pos;
+        }
+
+        @Override
+        public boolean seekToNewSource(long targetPos) {
+            return false;
+        }
+    }
+
+    @Test
+    void testBothStartAndEndWithinRange() throws Exception {
+        try (CsvReadStrategy strategy = new CsvReadStrategy()) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date startDateStr = dateFormat.parse("2024-01-01 00:00:00");
+            Date endDateStr = dateFormat.parse("2024-12-31 00:00:00");
+
+            long modificationTime =
+                    new SimpleDateFormat("yyyy-MM-dd").parse("2024-06-01").getTime();
+
+            strategy.fileModifiedStartDate = startDateStr;
+            strategy.fileModifiedEndDate = endDateStr;
+
+            FileStatus fileStatus =
+                    new FileStatus(0L, false, 0, 0, modificationTime, 0, null, null, null, null);
+            boolean result = strategy.filterFileByModificationDate(fileStatus);
+            Assertions.assertTrue(result);
+        }
+    }
+
+    @Test
+    void testOnlyEndDateOutOfRange() throws Exception {
+
+        try (CsvReadStrategy strategy = new CsvReadStrategy()) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date endDateStr = dateFormat.parse("2024-07-01 00:00:00");
+
+            strategy.fileModifiedStartDate = null;
+            strategy.fileModifiedEndDate = endDateStr;
+
+            long modificationTime =
+                    new SimpleDateFormat("yyyy-MM-dd").parse("2024-06-01").getTime();
+
+            FileStatus fileStatus =
+                    new FileStatus(0L, false, 0, 0, modificationTime, 0, null, null, null, null);
+            boolean result = strategy.filterFileByModificationDate(fileStatus);
+            Assertions.assertTrue(result);
+        }
+    }
+
+    @Test
+    void testOnlyEndDateOutOfRangeWithHour() throws Exception {
+
+        try (CsvReadStrategy strategy = new CsvReadStrategy()) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date endDateStr = dateFormat.parse("2024-07-01 14:00:00");
+
+            strategy.fileModifiedStartDate = null;
+            strategy.fileModifiedEndDate = endDateStr;
+
+            long modificationTime = dateFormat.parse("2024-07-01 13:00:00").getTime();
+
+            FileStatus fileStatus =
+                    new FileStatus(0L, false, 0, 0, modificationTime, 0, null, null, null, null);
+            boolean result = strategy.filterFileByModificationDate(fileStatus);
+            Assertions.assertTrue(result);
+        }
+    }
+
+    @Test
+    void testNoDateSet() throws Exception {
+
+        try (CsvReadStrategy strategy = new CsvReadStrategy()) {
+            strategy.fileModifiedStartDate = null;
+            strategy.fileModifiedEndDate = null;
+            FileStatus fileStatus =
+                    new FileStatus(
+                            0L, false, 0, 0, System.currentTimeMillis(), 0, null, null, null, null);
+            boolean result = strategy.filterFileByModificationDate(fileStatus);
+            Assertions.assertTrue(result);
+        }
+    }
+
+    @Test
+    void testOnlyStartDateOutOfRange() throws Exception {
+
+        try (CsvReadStrategy strategy = new CsvReadStrategy()) {
+            Date startDateStr =
+                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2024-04-01 00:00:00");
+
+            strategy.fileModifiedStartDate = startDateStr;
+            strategy.fileModifiedEndDate = null;
+
+            long modificationTime =
+                    new SimpleDateFormat("yyyy-MM-dd").parse("2024-06-01").getTime();
+
+            FileStatus fileStatus =
+                    new FileStatus(0L, false, 0, 0, modificationTime, 0, null, null, null, null);
+            boolean result = strategy.filterFileByModificationDate(fileStatus);
+            Assertions.assertTrue(result);
+        }
+    }
+
+    @Test
+    public void testSetCatalogTableShouldNotThrowWhenFileListIsEmpty() {
+        Config pluginConfig = ConfigFactory.parseMap(buildBasePluginConfigWithPartitions());
+        CatalogTable catalogTable = buildCatalogTable();
+
+        Assertions.assertAll(
+                () -> {
+                    try (ReadStrategy strategy = new TextReadStrategy()) {
+                        assertSetCatalogTableWithEmptyFileNames(
+                                strategy, pluginConfig, catalogTable);
+                    }
+                },
+                () -> {
+                    try (ReadStrategy strategy = new CsvReadStrategy()) {
+                        assertSetCatalogTableWithEmptyFileNames(
+                                strategy, pluginConfig, catalogTable);
+                    }
+                },
+                () -> {
+                    try (ReadStrategy strategy = new ExcelReadStrategy()) {
+                        assertSetCatalogTableWithEmptyFileNames(
+                                strategy, pluginConfig, catalogTable);
+                    }
+                },
+                () -> {
+                    try (ReadStrategy strategy = new XmlReadStrategy()) {
+                        assertSetCatalogTableWithEmptyFileNames(
+                                strategy, pluginConfig, catalogTable);
+                    }
+                },
+                () -> {
+                    try (ReadStrategy strategy = new JsonReadStrategy()) {
+                        assertSetCatalogTableWithEmptyFileNames(
+                                strategy, pluginConfig, catalogTable);
+                    }
+                });
+    }
+
+    @Test
+    public void testGetSeaTunnelRowTypeInfoShouldNotThrowWhenFileListIsEmpty() throws Exception {
+        Config pluginConfig = ConfigFactory.parseMap(buildBasePluginConfigWithPartitions());
+
+        try (TextReadStrategy textReadStrategy = new TextReadStrategy()) {
+            textReadStrategy.setPluginConfig(pluginConfig);
+            SeaTunnelRowType textRowType =
+                    Assertions.assertDoesNotThrow(
+                            () -> textReadStrategy.getSeaTunnelRowTypeInfo("/tmp/dt=2024-01-01"));
+            Assertions.assertEquals(
+                    "dt", textRowType.getFieldNames()[textRowType.getTotalFields() - 1]);
+        }
+
+        try (CsvReadStrategy csvReadStrategy = new CsvReadStrategy()) {
+            csvReadStrategy.setPluginConfig(pluginConfig);
+            SeaTunnelRowType csvRowType =
+                    Assertions.assertDoesNotThrow(
+                            () -> csvReadStrategy.getSeaTunnelRowTypeInfo("/tmp/dt=2024-01-01"));
+            Assertions.assertEquals(
+                    "dt", csvRowType.getFieldNames()[csvRowType.getTotalFields() - 1]);
+        }
+    }
+
+    @Test
+    void testResolveRelativePathWithSftpUri() {
+        String basePath = "sftp://server:22/path";
+        String fullFilePath = "sftp://server:22/path/sub/file.txt";
+        Assertions.assertEquals(
+                "sub/file.txt", AbstractReadStrategy.resolveRelativePath(basePath, fullFilePath));
+    }
+
+    @Test
+    void testResolveRelativePathWithFtpUri() {
+        String basePath = "ftp://server:21/tmp/seatunnel/read";
+        String fullFilePath = "ftp://server:21/tmp/seatunnel/read/file.txt";
+        Assertions.assertEquals(
+                "file.txt", AbstractReadStrategy.resolveRelativePath(basePath, fullFilePath));
+    }
+
+    @Test
+    void testResolveRelativePathWithCustomSchemeUri() {
+        String basePath = "default.default_sftp://sftp:22/tmp/seatunnel/update/src";
+        String fullFilePath = "default.default_sftp://sftp:22/tmp/seatunnel/update/src/test.bin_0";
+        Assertions.assertEquals(
+                "test.bin_0", AbstractReadStrategy.resolveRelativePath(basePath, fullFilePath));
+    }
+
+    private static Map<String, Object> buildBasePluginConfigWithPartitions() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(FileBaseSourceOptions.FILE_PATH.key(), "/tmp/dt=2024-01-01");
+        return config;
+    }
+
+    private static CatalogTable buildCatalogTable() {
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"id"}, new SeaTunnelDataType[] {BasicType.INT_TYPE});
+        return CatalogTableUtil.getCatalogTable("test", rowType);
+    }
+
+    private static void assertSetCatalogTableWithEmptyFileNames(
+            ReadStrategy readStrategy, Config pluginConfig, CatalogTable catalogTable) {
+        readStrategy.setPluginConfig(pluginConfig);
+        Assertions.assertDoesNotThrow(() -> readStrategy.setCatalogTable(catalogTable));
+        SeaTunnelRowType actualRowType = readStrategy.getActualSeaTunnelRowTypeInfo();
+        Assertions.assertArrayEquals(new String[] {"id", "dt"}, actualRowType.getFieldNames());
     }
 }

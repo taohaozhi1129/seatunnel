@@ -37,6 +37,9 @@ import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.Serializable;
+import java.sql.DriverManager;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The source implementation of {@link Source}, used for proxy all {@link SeaTunnelSource} in flink.
@@ -47,6 +50,18 @@ import java.io.Serializable;
 public class FlinkSource<SplitT extends SourceSplit, EnumStateT extends Serializable>
         implements Source<SeaTunnelRow, SplitWrapper<SplitT>, EnumStateT>,
                 ResultTypeQueryable<SeaTunnelRow> {
+
+    static {
+        // Load DriverManager first to avoid deadlock between DriverManager's
+        // static initialization block and specific driver class's static
+        // initialization block when two different driver classes are loading
+        // concurrently using Class.forName while DriverManager is uninitialized
+        // before.
+        //
+        // This could happen in JDK 8 but not above as driver loading has been
+        // moved out of DriverManager's static initialization block since JDK 9.
+        DriverManager.getDrivers();
+    }
 
     private final SeaTunnelSource<SeaTunnelRow, SplitT, EnumStateT> source;
 
@@ -78,21 +93,25 @@ public class FlinkSource<SplitT extends SourceSplit, EnumStateT extends Serializ
     @Override
     public SplitEnumerator<SplitWrapper<SplitT>, EnumStateT> createEnumerator(
             SplitEnumeratorContext<SplitWrapper<SplitT>> enumContext) throws Exception {
+        Set<Integer> noMoreSplitsSignaledReaders = ConcurrentHashMap.newKeySet();
         SourceSplitEnumerator.Context<SplitT> context =
-                new FlinkSourceSplitEnumeratorContext<>(enumContext);
+                new FlinkSourceSplitEnumeratorContext<>(
+                        enumContext, noMoreSplitsSignaledReaders::add);
         SourceSplitEnumerator<SplitT, EnumStateT> enumerator = source.createEnumerator(context);
-        return new FlinkSourceEnumerator<>(enumerator, enumContext);
+        return new FlinkSourceEnumerator<>(enumerator, enumContext, noMoreSplitsSignaledReaders);
     }
 
     @Override
     public SplitEnumerator<SplitWrapper<SplitT>, EnumStateT> restoreEnumerator(
             SplitEnumeratorContext<SplitWrapper<SplitT>> enumContext, EnumStateT checkpoint)
             throws Exception {
+        Set<Integer> noMoreSplitsSignaledReaders = ConcurrentHashMap.newKeySet();
         FlinkSourceSplitEnumeratorContext<SplitT> context =
-                new FlinkSourceSplitEnumeratorContext<>(enumContext);
+                new FlinkSourceSplitEnumeratorContext<>(
+                        enumContext, noMoreSplitsSignaledReaders::add);
         SourceSplitEnumerator<SplitT, EnumStateT> enumerator =
                 source.restoreEnumerator(context, checkpoint);
-        return new FlinkSourceEnumerator<>(enumerator, enumContext);
+        return new FlinkSourceEnumerator<>(enumerator, enumContext, noMoreSplitsSignaledReaders);
     }
 
     @Override

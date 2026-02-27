@@ -38,9 +38,10 @@ import org.apache.seatunnel.connectors.cdc.debezium.DebeziumDeserializationSchem
 import org.apache.seatunnel.connectors.cdc.debezium.DeserializeFormat;
 import org.apache.seatunnel.connectors.cdc.debezium.row.DebeziumJsonDeserializeSchema;
 import org.apache.seatunnel.connectors.cdc.debezium.row.SeaTunnelRowDebeziumDeserializeSchema;
+import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.config.MySqlIncrementalSourceOptions;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.config.MySqlSourceConfigFactory;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mysql.source.offset.BinlogOffsetFactory;
-import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.JdbcCatalogOptions;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcCommonOptions;
 
 import org.apache.kafka.connect.data.Struct;
 
@@ -52,6 +53,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -65,12 +67,12 @@ public class MySqlIncrementalSource<T> extends IncrementalSource<T, JdbcSourceCo
 
     @Override
     public Option<StartupMode> getStartupModeOption() {
-        return MySqlSourceOptions.STARTUP_MODE;
+        return MySqlIncrementalSourceOptions.STARTUP_MODE;
     }
 
     @Override
     public Option<StopMode> getStopModeOption() {
-        return MySqlSourceOptions.STOP_MODE;
+        return MySqlIncrementalSourceOptions.STOP_MODE;
     }
 
     @Override
@@ -83,8 +85,7 @@ public class MySqlIncrementalSource<T> extends IncrementalSource<T, JdbcSourceCo
         MySqlSourceConfigFactory configFactory = new MySqlSourceConfigFactory();
         configFactory.serverId(config.get(JdbcSourceOptions.SERVER_ID));
         configFactory.fromReadonlyConfig(readonlyConfig);
-        JdbcUrlUtil.UrlInfo urlInfo =
-                JdbcUrlUtil.getUrlInfo(config.get(JdbcCatalogOptions.BASE_URL));
+        JdbcUrlUtil.UrlInfo urlInfo = JdbcUrlUtil.getUrlInfo(config.get(JdbcCommonOptions.URL));
         configFactory.originUrl(urlInfo.getOrigin());
         configFactory.hostname(urlInfo.getHost());
         configFactory.port(urlInfo.getPort());
@@ -163,5 +164,10 @@ public class MySqlIncrementalSource<T> extends IncrementalSource<T, JdbcSourceCo
                 SchemaChangeType.DROP_COLUMN,
                 SchemaChangeType.RENAME_COLUMN,
                 SchemaChangeType.UPDATE_COLUMN);
+    }
+
+    @Override
+    public Optional<String> driverName() {
+        return Optional.of("com.mysql.cj.jdbc.Driver");
     }
 }

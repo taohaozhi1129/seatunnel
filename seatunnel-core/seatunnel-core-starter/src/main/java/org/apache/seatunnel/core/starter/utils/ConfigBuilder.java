@@ -100,11 +100,10 @@ public class ConfigBuilder {
     }
 
     public static Config of(@NonNull Map<String, Object> objectMap) {
-        return of(objectMap, false, false);
+        return of(objectMap, false);
     }
 
-    public static Config of(
-            @NonNull Map<String, Object> objectMap, boolean isEncrypt, boolean isJson) {
+    public static Config of(@NonNull Map<String, Object> objectMap, boolean isEncrypt) {
         log.info("Loading config file from objectMap");
         Config config =
                 ConfigFactory.parseMap(objectMap)
@@ -267,6 +266,11 @@ public class ConfigBuilder {
                                                             System.getProperty(placeholder),
                                                             null);
                                                 });
+                            } else if (variable instanceof Map) {
+                                processVariablesMap((Map<String, Object>) variable);
+                                return variable;
+                            } else if (variable instanceof List) {
+                                return processVariablesList((List<?>) variable);
                             }
                             return variable;
                         })

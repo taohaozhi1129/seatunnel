@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.psql;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
@@ -32,8 +34,6 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.SQLUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.dialectenum.FieldIdeEnum;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.source.JdbcSourceTable;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
@@ -43,9 +43,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.psql.PostgresTypeConverter.PG_CHAR;
@@ -159,20 +161,26 @@ public class PostgresDialect implements JdbcDialect {
                 Arrays.stream(uniqueKeyFields)
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
+        final Set<String> uniqueKeyFieldsSet = new HashSet<>(Arrays.asList(uniqueKeyFields));
         String updateClause =
                 Arrays.stream(fieldNames)
+                        .filter(fieldName -> !uniqueKeyFieldsSet.contains(fieldName))
                         .map(
                                 fieldName ->
                                         quoteIdentifier(fieldName)
                                                 + "=EXCLUDED."
                                                 + quoteIdentifier(fieldName))
                         .collect(Collectors.joining(", "));
+        String conflictAction =
+                updateClause.isEmpty()
+                        ? "DO NOTHING"
+                        : String.format("DO UPDATE SET %s", updateClause);
         String upsertSQL =
                 String.format(
-                        "%s ON CONFLICT (%s) DO UPDATE SET %s",
+                        "%s ON CONFLICT (%s) %s",
                         getInsertIntoStatement(database, tableName, fieldNames),
                         uniqueColumns,
-                        updateClause);
+                        conflictAction);
         return Optional.of(upsertSQL);
     }
 

@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.maxcompute.source;
 
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.options.ConnectorCommonOptions;
+import org.apache.seatunnel.api.options.table.CatalogOptions;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.connector.TableSource;
@@ -50,8 +51,9 @@ public class MaxcomputeSourceFactory implements TableSourceFactory {
                         MaxcomputeSourceOptions.SPLIT_ROW,
                         ConnectorCommonOptions.SCHEMA,
                         MaxcomputeSourceOptions.PROJECT,
-                        MaxcomputeSourceOptions.READ_COLUMNS)
-                .exclusive(MaxcomputeSourceOptions.TABLE_LIST, MaxcomputeSourceOptions.TABLE_NAME)
+                        MaxcomputeSourceOptions.READ_COLUMNS,
+                        MaxcomputeSourceOptions.TUNNEL_ENDPOINT)
+                .exclusive(CatalogOptions.TABLE_LIST, MaxcomputeSourceOptions.TABLE_NAME)
                 .build();
     }
 

@@ -17,9 +17,9 @@
 
 package org.apache.seatunnel.connectors.seatunnel.mongodb.source.split;
 
-import org.apache.seatunnel.connectors.seatunnel.mongodb.internal.MongodbClientProvider;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.ImmutablePair;
 
-import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.seatunnel.connectors.seatunnel.mongodb.internal.MongodbClientProvider;
 
 import org.bson.BsonDocument;
 import org.bson.BsonString;
@@ -70,5 +70,43 @@ public class SamplingSplitStrategyTest {
 
         assertEquals(Long.valueOf(13360484963L), result.getLeft());
         assertEquals(Long.valueOf(200), result.getRight());
+    }
+
+    @Test
+    public void testSplitWithZeroAvgSize() {
+        // Mock the getDocumentNumAndAvgSize method to return zero avgSize
+        SamplingSplitStrategy spyStrategy =
+                new SamplingSplitStrategy(
+                        clientProvider, "_id", new BsonDocument(), new BsonDocument(), 10L, 1024L) {
+                    @Override
+                    protected ImmutablePair<Long, Long> getDocumentNumAndAvgSize() {
+                        return ImmutablePair.of(10L, 0L); // 10 documents with 0 avgSize
+                    }
+                };
+
+        // This should not throw a division by zero exception
+        java.util.List<MongoSplit> splits = spyStrategy.split();
+
+        // Should return a single split when count > 0 and avgSize = 0
+        assertEquals(1, splits.size());
+    }
+
+    @Test
+    public void testSplitWithZeroAvgSizeAndZeroCount() {
+        // Mock the getDocumentNumAndAvgSize method to return zero avgSize and zero count
+        SamplingSplitStrategy spyStrategy =
+                new SamplingSplitStrategy(
+                        clientProvider, "_id", new BsonDocument(), new BsonDocument(), 10L, 1024L) {
+                    @Override
+                    protected ImmutablePair<Long, Long> getDocumentNumAndAvgSize() {
+                        return ImmutablePair.of(0L, 0L); // 0 documents with 0 avgSize
+                    }
+                };
+
+        // This should not throw a division by zero exception
+        java.util.List<MongoSplit> splits = spyStrategy.split();
+
+        // Should return an empty list when count = 0 and avgSize = 0
+        assertEquals(0, splits.size());
     }
 }

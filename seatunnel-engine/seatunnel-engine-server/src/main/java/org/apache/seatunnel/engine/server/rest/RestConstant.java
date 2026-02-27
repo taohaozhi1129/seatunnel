@@ -33,6 +33,8 @@ public class RestConstant {
 
     public static final String CREATE_TIME = "createTime";
 
+    public static final String START_TIME = "startTime";
+
     public static final String FINISH_TIME = "finishTime";
 
     public static final String ENV_OPTIONS = "envOptions";
@@ -46,8 +48,7 @@ public class RestConstant {
     public static final String ERROR_MSG = "errorMsg";
 
     public static final String METRICS = "metrics";
-
-    public static final String HOCON = "hocon";
+    public static final String LIMIT = "limit";
 
     public static final String TABLE_SOURCE_RECEIVED_COUNT = "TableSourceReceivedCount";
     public static final String TABLE_SINK_WRITE_COUNT = "TableSinkWriteCount";
@@ -58,9 +59,15 @@ public class RestConstant {
     public static final String TABLE_SOURCE_RECEIVED_BYTES_PER_SECONDS =
             "TableSourceReceivedBytesPerSeconds";
     public static final String TABLE_SINK_WRITE_BYTES_PER_SECONDS = "TableSinkWriteBytesPerSeconds";
-
+    public static final String TABLE_SINK_COMMITTED_COUNT = "TableSinkCommittedCount";
+    public static final String TABLE_SINK_COMMITTED_QPS = "TableSinkCommittedQPS";
+    public static final String TABLE_SINK_COMMITTED_BYTES = "TableSinkCommittedBytes";
+    public static final String TABLE_SINK_COMMITTED_BYTES_PER_SECONDS =
+            "TableSinkCommittedBytesPerSeconds";
     public static final String CONTEXT_PATH = "/hazelcast/rest/maps";
     public static final String INSTANCE_CONTEXT_PATH = "/hazelcast/rest/instance";
+
+    public static final String PRETTY = "pretty";
 
     // api path start
     public static final String REST_URL_OVERVIEW = "/overview";
@@ -82,6 +89,7 @@ public class RestConstant {
     public static final String REST_URL_STOP_JOB = "/stop-job";
     public static final String REST_URL_STOP_JOBS = "/stop-jobs";
     public static final String REST_URL_UPDATE_TAGS = "/update-tags";
+    public static final String REST_URL_PENDING_JOBS = "/pending-jobs";
     // Get All Nodes Log
     public static final String REST_URL_LOGS = "/logs";
     // Get Current Node Log
@@ -90,6 +98,8 @@ public class RestConstant {
     public static final String REST_URL_GET_ALL_LOG_NAME = "/get-all-log-name";
     public static final String REST_URL_METRICS = "/metrics";
     public static final String REST_URL_OPEN_METRICS = "/openmetrics";
+    public static final String REST_URL_CHECKPOINT_OVERVIEW = "/jobs/checkpoints";
+    public static final String REST_URL_CHECKPOINT_HISTORY = "/jobs/checkpoints/history";
     // api path end
 
 }

@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.jdbc;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.Pair;
 
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -34,8 +35,6 @@ import org.apache.seatunnel.e2e.common.container.EngineType;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.DisabledOnContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
-
-import org.apache.commons.lang3.tuple.Pair;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -69,7 +68,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class JdbcIrisIT extends AbstractJdbcIT {
-    private static final String IRIS_IMAGE = "intersystems/iris-community:2023.1";
+    private static final String IRIS_IMAGE = "intersystems/iris-community:2025.1";
     private static final String IRIS_NETWORK_ALIASES = "e2e_irisDb";
     private static final String DRIVER_CLASS = "com.intersystems.jdbc.IRISDriver";
     private static final int IRIS_PORT = 1972;

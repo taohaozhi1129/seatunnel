@@ -27,7 +27,7 @@ import org.apache.seatunnel.engine.client.job.ClientJobProxy;
 import org.apache.seatunnel.engine.common.config.ConfigProvider;
 import org.apache.seatunnel.engine.common.config.JobConfig;
 import org.apache.seatunnel.engine.common.config.SeaTunnelConfig;
-import org.apache.seatunnel.engine.core.job.JobStatus;
+import org.apache.seatunnel.engine.common.job.JobStatus;
 import org.apache.seatunnel.engine.server.SeaTunnelServerStarter;
 import org.apache.seatunnel.format.text.constant.TextFormatConstant;
 
@@ -134,14 +134,13 @@ public class TextHeaderIT {
                     engineClient.createExecutionContext(
                             testResources.getRight(), jobConfig, seaTunnelConfig);
             ClientJobProxy clientJobProxy = jobExecutionEnv.execute();
-
             CompletableFuture<JobStatus> objectCompletableFuture =
                     CompletableFuture.supplyAsync(clientJobProxy::waitForJobComplete);
             Awaitility.await()
-                    .atMost(600000, TimeUnit.MILLISECONDS)
+                    .atMost(300000, TimeUnit.MILLISECONDS)
+                    .pollInterval(2000, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () -> {
-                                Thread.sleep(2000);
                                 Assertions.assertTrue(
                                         objectCompletableFuture.isDone()
                                                 && JobStatus.FINISHED.equals(

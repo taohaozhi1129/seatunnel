@@ -19,7 +19,8 @@ package org.apache.seatunnel.connectors.seatunnel.starrocks.source;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
-import org.apache.seatunnel.api.options.SinkConnectorCommonOptions;
+import org.apache.seatunnel.api.options.ConnectorCommonOptions;
+import org.apache.seatunnel.api.options.table.CatalogOptions;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.connector.TableSource;
@@ -50,7 +51,7 @@ public class StarRocksSourceFactory implements TableSourceFactory {
                         StarRocksSourceOptions.PASSWORD,
                         StarRocksSourceOptions.DATABASE)
                 .optional(
-                        SinkConnectorCommonOptions.SCHEMA,
+                        ConnectorCommonOptions.SCHEMA,
                         StarRocksSourceOptions.MAX_RETRIES,
                         StarRocksSourceOptions.QUERY_TABLET_SIZE,
                         StarRocksSourceOptions.SCAN_FILTER,
@@ -59,7 +60,7 @@ public class StarRocksSourceFactory implements TableSourceFactory {
                         StarRocksSourceOptions.SCAN_KEEP_ALIVE_MIN,
                         StarRocksSourceOptions.SCAN_BATCH_ROWS,
                         StarRocksSourceOptions.SCAN_CONNECT_TIMEOUT)
-                .exclusive(StarRocksSourceOptions.TABLE, StarRocksSourceOptions.TABLE_LIST)
+                .exclusive(StarRocksSourceOptions.TABLE, CatalogOptions.TABLE_LIST)
                 .build();
     }
 

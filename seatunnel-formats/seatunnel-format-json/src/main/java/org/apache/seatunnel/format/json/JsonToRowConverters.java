@@ -19,6 +19,7 @@
 package org.apache.seatunnel.format.json;
 
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.MapType;
@@ -33,8 +34,6 @@ import org.apache.seatunnel.common.utils.DateUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.format.json.exception.SeaTunnelJsonFormatException;
 
-import org.apache.commons.lang3.StringUtils;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
@@ -42,6 +41,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -154,6 +154,13 @@ public class JsonToRowConverters implements Serializable {
                     @Override
                     public Object convert(JsonNode jsonNode, String fieldName) {
                         return convertToLocalDateTime(jsonNode, fieldName);
+                    }
+                };
+            case TIMESTAMP_TZ:
+                return new JsonToObjectConverter() {
+                    @Override
+                    public Object convert(JsonNode jsonNode, String fieldName) {
+                        return convertToOffsetDateTime(jsonNode, fieldName);
                     }
                 };
             case FLOAT:
@@ -283,6 +290,11 @@ public class JsonToRowConverters implements Serializable {
         LocalTime localTime = parsedTimestamp.query(TemporalQueries.localTime());
         LocalDate localDate = parsedTimestamp.query(TemporalQueries.localDate());
         return LocalDateTime.of(localDate, localTime);
+    }
+
+    private OffsetDateTime convertToOffsetDateTime(JsonNode jsonNode, String fieldName) {
+        String datetimeStr = jsonNode.asText();
+        return OffsetDateTime.parse(datetimeStr);
     }
 
     private String convertToString(JsonNode jsonNode) {

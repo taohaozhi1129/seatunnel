@@ -18,6 +18,7 @@
 package org.apache.seatunnel.e2e.connector.file.local;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.connectors.seatunnel.file.config.FileSystemType;
@@ -36,10 +37,10 @@ import org.apache.seatunnel.e2e.common.util.ContainerUtil;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.apache.commons.lang3.StringUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.TestTemplate;
+import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.shaded.com.github.dockerjava.core.command.ExecStartResultCallback;
 
@@ -287,6 +288,16 @@ public class LocalFileIT extends TestSuiteBase {
                         container);
 
                 ContainerUtil.copyFileIntoContainers(
+                        "/excel/e2e.xlsx",
+                        "/seatunnel/read/excel_filter_regex/name=tyrantlucifer/hobby=coding/e2e_filter.xlsx",
+                        container);
+
+                ContainerUtil.copyFileIntoContainers(
+                        "/excel/special_excel.xlsx",
+                        "/seatunnel/read/special_excel/special_excel.xlsx",
+                        container);
+
+                ContainerUtil.copyFileIntoContainers(
                         "/csv/break_line.csv",
                         "/seatunnel/read/csv/break_line/break_line.csv",
                         container);
@@ -313,11 +324,13 @@ public class LocalFileIT extends TestSuiteBase {
         TestHelper helper = new TestHelper(container);
         helper.execute("/csv/fake_to_local_csv.conf");
         helper.execute("/csv/local_csv_to_assert.conf");
+        helper.execute("/csv/local_csv_enable_split_to_assert.conf");
         helper.execute("/csv/csv_with_header_to_assert.conf");
         helper.execute("/csv/breakline_csv_to_assert.conf");
         helper.execute("/excel/fake_to_local_excel.conf");
         helper.execute("/excel/local_excel_to_assert.conf");
         helper.execute("/excel/local_excel_projection_to_assert.conf");
+        helper.execute("/excel/special_excel_to_assert.conf");
         // test write local text file
         helper.execute("/text/fake_to_local_file_text.conf");
         helper.execute("/text/local_file_text_lzo_to_assert.conf");
@@ -339,6 +352,7 @@ public class LocalFileIT extends TestSuiteBase {
         helper.execute("/json/fake_to_local_file_json.conf");
         // test read local json file
         helper.execute("/json/local_file_json_to_assert.conf");
+        helper.execute("/json/local_file_json_enable_split_to_assert.conf");
         helper.execute("/json/local_file_json_lzo_to_console.conf");
         // test read local json file with assigning encoding
         helper.execute("/json/fake_to_local_file_json_with_encoding.conf");
@@ -357,10 +371,13 @@ public class LocalFileIT extends TestSuiteBase {
         helper.execute("/parquet/fake_to_local_file_parquet.conf");
         // test read local parquet file
         helper.execute("/parquet/local_file_parquet_to_assert.conf");
+        helper.execute("/parquet/local_file_parquet_enable_split_to_assert.conf");
         // test read local parquet file with projection
         helper.execute("/parquet/local_file_parquet_projection_to_assert.conf");
         // test read filtered local file
         helper.execute("/excel/local_filter_excel_to_assert.conf");
+        // test read filtered local file with regex
+        helper.execute("/excel/local_filter_regex_excel_to_assert.conf");
 
         // test read empty directory
         helper.execute("/json/local_file_to_console.conf");
@@ -383,6 +400,7 @@ public class LocalFileIT extends TestSuiteBase {
         helper.execute("/text/local_file_multi_zip_text_to_assert.conf");
         // test read single local text file with tar compression
         helper.execute("/text/local_file_tar_text_to_assert.conf");
+        helper.execute("/text/local_file_text_enable_split_to_assert.conf");
         // test read multi local text file with tar compression
         helper.execute("/text/local_file_multi_tar_text_to_assert.conf");
         // test read single local text file with tar.gz compression
@@ -403,6 +421,62 @@ public class LocalFileIT extends TestSuiteBase {
         helper.execute("/excel/local_excel_multi_zip_to_assert.conf");
         helper.execute("/excel/local_excel_xls_gz_to_assert.conf");
         helper.execute("/excel/local_excel_xlsx_gz_to_assert.conf");
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.FLINK, EngineType.SPARK},
+            disabledReason =
+                    "sync_mode=update needs to compare source/target on the same filesystem. Local filesystem is not shared between engine master/workers in Flink/Spark E2E.")
+    public void testLocalFileBinaryUpdateModeDistcp(TestContainer container)
+            throws IOException, InterruptedException {
+        resetUpdateTestPath();
+        putLocalFile("/tmp/seatunnel/update/src/test.bin", "abc");
+
+        TestHelper helper = new TestHelper(container);
+        helper.execute("/binary/local_file_binary_update_distcp.conf");
+        Assertions.assertEquals("abc", readLocalFile("/tmp/seatunnel/update/dst/test.bin"));
+
+        // Make target newer with same length, distcp strategy should SKIP overwrite.
+        putLocalFile("/tmp/seatunnel/update/dst/test.bin", "zzz");
+        helper.execute("/binary/local_file_binary_update_distcp.conf");
+        Assertions.assertEquals("zzz", readLocalFile("/tmp/seatunnel/update/dst/test.bin"));
+
+        // Change source length, distcp strategy should COPY overwrite.
+        putLocalFile("/tmp/seatunnel/update/src/test.bin", "abcd");
+        helper.execute("/binary/local_file_binary_update_distcp.conf");
+        Assertions.assertEquals("abcd", readLocalFile("/tmp/seatunnel/update/dst/test.bin"));
+
+        baseContainer.execInContainer("sh", "-c", "rm -rf /tmp/seatunnel/update");
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.FLINK, EngineType.SPARK},
+            disabledReason =
+                    "sync_mode=update needs to compare source/target on the same filesystem. Local filesystem is not shared between engine master/workers in Flink/Spark E2E.")
+    public void testLocalFileBinaryUpdateModeStrictChecksum(TestContainer container)
+            throws IOException, InterruptedException {
+        resetUpdateTestPath();
+        putLocalFile("/tmp/seatunnel/update/src/test.bin", "abc");
+
+        TestHelper helper = new TestHelper(container);
+        helper.execute("/binary/local_file_binary_update_strict_checksum.conf");
+        Assertions.assertEquals("abc", readLocalFile("/tmp/seatunnel/update/dst/test.bin"));
+
+        long firstMtimeSeconds = getLocalFileMtimeSeconds("/tmp/seatunnel/update/dst/test.bin");
+        Thread.sleep(1100);
+
+        helper.execute("/binary/local_file_binary_update_strict_checksum.conf");
+        long secondMtimeSeconds = getLocalFileMtimeSeconds("/tmp/seatunnel/update/dst/test.bin");
+        Assertions.assertEquals(
+                firstMtimeSeconds,
+                secondMtimeSeconds,
+                "Strict checksum should skip unchanged files and keep target mtime");
+
+        baseContainer.execInContainer("sh", "-c", "rm -rf /tmp/seatunnel/update");
     }
 
     @TestTemplate
@@ -468,6 +542,46 @@ public class LocalFileIT extends TestSuiteBase {
         Assertions.assertFalse(localFileCatalog.isExistsData(tablePath));
         localFileCatalog.dropTable(tablePath, false);
         Assertions.assertFalse(localFileCatalog.tableExists(tablePath));
+    }
+
+    private void resetUpdateTestPath() throws IOException, InterruptedException {
+        Container.ExecResult result =
+                baseContainer.execInContainer(
+                        "sh",
+                        "-c",
+                        "rm -rf /tmp/seatunnel/update && mkdir -p /tmp/seatunnel/update/src /tmp/seatunnel/update/dst /tmp/seatunnel/update/tmp");
+        Assertions.assertEquals(0, result.getExitCode(), result.getStderr());
+    }
+
+    private void putLocalFile(String filePath, String content)
+            throws IOException, InterruptedException {
+        String command =
+                "mkdir -p $(dirname '"
+                        + filePath
+                        + "') && printf '"
+                        + content
+                        + "' > '"
+                        + filePath
+                        + "' && chmod 666 '"
+                        + filePath
+                        + "'";
+        Container.ExecResult result = baseContainer.execInContainer("sh", "-c", command);
+        Assertions.assertEquals(0, result.getExitCode(), result.getStderr());
+    }
+
+    private String readLocalFile(String filePath) throws IOException, InterruptedException {
+        Container.ExecResult result =
+                baseContainer.execInContainer("sh", "-c", "cat '" + filePath + "'");
+        Assertions.assertEquals(0, result.getExitCode(), result.getStderr());
+        return result.getStdout() == null ? "" : result.getStdout().trim();
+    }
+
+    private long getLocalFileMtimeSeconds(String filePath)
+            throws IOException, InterruptedException {
+        Container.ExecResult result =
+                baseContainer.execInContainer("sh", "-c", "stat -c %Y '" + filePath + "'");
+        Assertions.assertEquals(0, result.getExitCode(), result.getStderr());
+        return Long.parseLong(result.getStdout().trim());
     }
 
     private Path convertToLzoFile(File file) throws IOException {

@@ -19,6 +19,8 @@ package org.apache.seatunnel.connectors.seatunnel.hbase.config;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 
+import org.apache.hadoop.hbase.NamespaceDescriptor;
+
 import lombok.Builder;
 import lombok.Getter;
 
@@ -30,6 +32,8 @@ import java.util.Map;
 @Getter
 public class HbaseParameters implements Serializable {
 
+    public static final String DEFAULT_NAMESPACE = NamespaceDescriptor.DEFAULT_NAMESPACE_NAME_STR;
+
     private String zookeeperQuorum;
 
     private String namespace;
@@ -40,20 +44,30 @@ public class HbaseParameters implements Serializable {
 
     private List<String> columns;
 
+    private boolean isBinaryRowkey;
+
+    private String startRowkey;
+
+    private String endRowkey;
+
+    private Long startTimestamp;
+
+    private Long endTimestamp;
+
     private Map<String, String> familyNames;
 
     private String versionColumn;
 
     private Map<String, String> hbaseExtraConfig;
 
-    @Builder.Default private int caching = HbaseSinkOptions.HBASE_CACHING_CONFIG.defaultValue();
+    @Builder.Default private int caching = HbaseSourceOptions.HBASE_CACHING_CONFIG.defaultValue();
 
-    @Builder.Default private int batch = HbaseSinkOptions.HBASE_BATCH_CONFIG.defaultValue();
+    @Builder.Default private int batch = HbaseSourceOptions.HBASE_BATCH_CONFIG.defaultValue();
 
     @Builder.Default private Long ttl = HbaseSinkOptions.HBASE_TTL_CONFIG.defaultValue();
 
     @Builder.Default
-    private boolean cacheBlocks = HbaseSinkOptions.HBASE_CACHE_BLOCKS_CONFIG.defaultValue();
+    private boolean cacheBlocks = HbaseSourceOptions.HBASE_CACHE_BLOCKS_CONFIG.defaultValue();
 
     @Builder.Default
     private String rowkeyDelimiter = HbaseSinkOptions.ROWKEY_DELIMITER.defaultValue();
@@ -69,6 +83,12 @@ public class HbaseParameters implements Serializable {
     @Builder.Default
     private HbaseSinkOptions.EnCoding enCoding = HbaseSinkOptions.ENCODING.defaultValue();
 
+    @Builder.Default
+    private boolean startRowInclusive = HbaseSourceOptions.START_ROW_INCLUSIVE.defaultValue();
+
+    @Builder.Default
+    private boolean endRowInclusive = HbaseSourceOptions.END_ROW_INCLUSIVE.defaultValue();
+
     public static HbaseParameters buildWithConfig(ReadonlyConfig config) {
         HbaseParametersBuilder builder = HbaseParameters.builder();
         String table = config.get(HbaseBaseOptions.TABLE);
@@ -79,7 +99,7 @@ public class HbaseParameters implements Serializable {
             builder.table(table.substring(colonIndex + 1));
         } else {
             builder.table(table);
-            builder.namespace("default");
+            builder.namespace(DEFAULT_NAMESPACE);
         }
 
         // required parameters
@@ -113,20 +133,51 @@ public class HbaseParameters implements Serializable {
             builder.table(table.substring(colonIndex + 1));
         } else {
             builder.table(table);
+            builder.namespace(DEFAULT_NAMESPACE);
         }
 
         if (pluginConfig.getOptional(HbaseSinkOptions.HBASE_EXTRA_CONFIG).isPresent()) {
             builder.hbaseExtraConfig(pluginConfig.get(HbaseSinkOptions.HBASE_EXTRA_CONFIG));
         }
-        if (pluginConfig.getOptional(HbaseSinkOptions.HBASE_CACHING_CONFIG).isPresent()) {
-            builder.caching(pluginConfig.get(HbaseSinkOptions.HBASE_CACHING_CONFIG));
+        if (pluginConfig.getOptional(HbaseSourceOptions.HBASE_CACHING_CONFIG).isPresent()) {
+            builder.caching(pluginConfig.get(HbaseSourceOptions.HBASE_CACHING_CONFIG));
         }
-        if (pluginConfig.getOptional(HbaseSinkOptions.HBASE_BATCH_CONFIG).isPresent()) {
-            builder.batch(pluginConfig.get(HbaseSinkOptions.HBASE_BATCH_CONFIG));
+        if (pluginConfig.getOptional(HbaseSourceOptions.HBASE_BATCH_CONFIG).isPresent()) {
+            builder.batch(pluginConfig.get(HbaseSourceOptions.HBASE_BATCH_CONFIG));
         }
-        if (pluginConfig.getOptional(HbaseSinkOptions.HBASE_CACHE_BLOCKS_CONFIG).isPresent()) {
-            builder.cacheBlocks(pluginConfig.get(HbaseSinkOptions.HBASE_CACHE_BLOCKS_CONFIG));
+        if (pluginConfig.getOptional(HbaseSourceOptions.HBASE_CACHE_BLOCKS_CONFIG).isPresent()) {
+            builder.cacheBlocks(pluginConfig.get(HbaseSourceOptions.HBASE_CACHE_BLOCKS_CONFIG));
+        }
+
+        if (pluginConfig.getOptional(HbaseSourceOptions.IS_BINARY_ROW_KEY).isPresent()) {
+            builder.isBinaryRowkey(pluginConfig.get(HbaseSourceOptions.IS_BINARY_ROW_KEY));
+        }
+        if (pluginConfig.getOptional(HbaseSourceOptions.START_ROW_KEY).isPresent()) {
+            builder.startRowkey(pluginConfig.get(HbaseSourceOptions.START_ROW_KEY));
+        }
+        if (pluginConfig.getOptional(HbaseSourceOptions.END_ROW_KEY).isPresent()) {
+            builder.endRowkey(pluginConfig.get(HbaseSourceOptions.END_ROW_KEY));
+        }
+        if (pluginConfig.getOptional(HbaseSourceOptions.START_ROW_INCLUSIVE).isPresent()) {
+            builder.startRowInclusive(pluginConfig.get(HbaseSourceOptions.START_ROW_INCLUSIVE));
+        }
+        if (pluginConfig.getOptional(HbaseSourceOptions.END_ROW_INCLUSIVE).isPresent()) {
+            builder.endRowInclusive(pluginConfig.get(HbaseSourceOptions.END_ROW_INCLUSIVE));
+        }
+
+        if (pluginConfig.getOptional(HbaseSourceOptions.START_TIMESTAMP).isPresent()) {
+            builder.startTimestamp(pluginConfig.get(HbaseSourceOptions.START_TIMESTAMP));
+        }
+        if (pluginConfig.getOptional(HbaseSourceOptions.END_TIMESTAMP).isPresent()) {
+            builder.endTimestamp(pluginConfig.get(HbaseSourceOptions.END_TIMESTAMP));
         }
         return builder.build();
+    }
+
+    public String getNamespace() {
+        if (namespace == null || namespace.trim().isEmpty()) {
+            return DEFAULT_NAMESPACE;
+        }
+        return namespace;
     }
 }

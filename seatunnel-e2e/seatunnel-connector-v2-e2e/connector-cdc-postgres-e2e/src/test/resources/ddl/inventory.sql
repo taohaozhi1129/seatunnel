@@ -49,6 +49,8 @@ CREATE TABLE postgres_cdc_table_1
     f_default_numeric   NUMERIC,
     f_numeric_no_scale  NUMERIC(24),
     f_inet              INET,
+    f_geometry          geometry(POINT, 4326),
+    f_geography         geography(POINT, 4326),
     PRIMARY KEY (id)
 );
 
@@ -101,6 +103,8 @@ CREATE TABLE sink_postgres_cdc_table_1
     f_default_numeric   NUMERIC,
     f_numeric_no_scale  NUMERIC(24),
     f_inet              INET,
+    f_geometry          geometry(POINT, 4326),
+    f_geography         geography(POINT, 4326),
     PRIMARY KEY (id)
 );
 
@@ -152,7 +156,9 @@ CREATE TABLE full_types_no_primary_key
     f_time              TIME(0),
     f_default_numeric   NUMERIC,
     f_numeric_no_scale  NUMERIC(24),
-    f_inet              INET
+    f_inet              INET,
+    f_geometry          geometry(POINT, 4326),
+    f_geography         geography(POINT, 4326)
 );
 
 CREATE TABLE full_types_no_primary_key_with_debezium
@@ -177,7 +183,9 @@ CREATE TABLE full_types_no_primary_key_with_debezium
     f_time              TIME(0),
     f_default_numeric   NUMERIC,
     f_numeric_no_scale  NUMERIC(24),
-    f_inet              INET
+    f_inet              INET,
+    f_geometry          geometry(POINT, 4326),
+    f_geography         geography(POINT, 4326)
 );
 
 CREATE TABLE postgres_cdc_table_3
@@ -198,6 +206,50 @@ CREATE TABLE sink_postgres_cdc_table_3
     PRIMARY KEY (id)
 );
 
+CREATE TABLE postgres_cdc_table_4
+(
+    id                  INTEGER NOT NULL,
+    f_bytea             BYTEA,
+    f_small             SMALLINT,
+    f_interval          INTERVAL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE sink_postgres_cdc_table_4
+(
+    id                  INTEGER NOT NULL,
+    f_bytea             BYTEA,
+    f_small             SMALLINT,
+    f_interval          INTERVAL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE postgres_cdc_table_5
+(
+    id        INTEGER NOT NULL,
+    f_bytea   BYTEA,
+    f_small   SMALLINT,
+    f_interval INTERVAL,
+    ip        INET,
+    network   CIDR,
+    mac       MACADDR,
+    mac8      MACADDR8,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE sink_postgres_cdc_table_5
+(
+    id        INTEGER NOT NULL,
+    f_bytea   BYTEA,
+    f_small   SMALLINT,
+    f_interval INTERVAL,
+    ip        INET,
+    network   CIDR,
+    mac       MACADDR,
+    mac8      MACADDR8,
+    PRIMARY KEY (id)
+);
+
 ALTER TABLE postgres_cdc_table_1
     REPLICA IDENTITY FULL;
 
@@ -205,6 +257,12 @@ ALTER TABLE postgres_cdc_table_2
     REPLICA IDENTITY FULL;
 
 ALTER TABLE postgres_cdc_table_3
+    REPLICA IDENTITY FULL;
+
+ALTER TABLE postgres_cdc_table_4
+    REPLICA IDENTITY FULL;
+
+ALTER TABLE postgres_cdc_table_5
     REPLICA IDENTITY FULL;
 
 ALTER TABLE sink_postgres_cdc_table_1
@@ -222,7 +280,9 @@ ALTER TABLE full_types_no_primary_key_with_debezium
 INSERT INTO postgres_cdc_table_1
 VALUES (1, '2', 32767, 65535, 2147483647, 5.5, 6.6, 123.12345, 404.4443, true,
         'Hello World', 'a', 'abc', 'abcd..xyz', '2020-07-17 18:00:22.123', '2020-07-17 18:00:22.123456',
-        '2020-07-17', '18:00:22', 500,88,'192.168.1.1');
+        '2020-07-17', '18:00:22', 500,88,'192.168.1.1',
+        ST_GeomFromText('POINT(-122.3452 47.5925)', 4326),
+        ST_GeographyFromText('POINT(-122.3452 47.5925)'));
 
 INSERT INTO postgres_cdc_table_2
 VALUES (1, '2', 32767, 65535, 2147483647, 5.5, 6.6, 123.12345, 404.4443, true,
@@ -232,12 +292,22 @@ VALUES (1, '2', 32767, 65535, 2147483647, 5.5, 6.6, 123.12345, 404.4443, true,
 INSERT INTO postgres_cdc_table_3
 VALUES (1, '2', 32767, 65535);
 
+INSERT INTO postgres_cdc_table_4
+VALUES (1, '2', 32767, INTERVAL '2 days 3 hours');
+
+INSERT INTO postgres_cdc_table_5 (id, f_bytea, f_small, f_interval, ip, network, mac, mac8)
+VALUES (1, '2', 32767, INTERVAL '1 day 2 hours', '192.168.1.100', '192.168.1.0/24', '08:00:2b:01:02:03', '08:00:2b:01:02:03:04:05');
+
 INSERT INTO full_types_no_primary_key
 VALUES (1, '2', 32767, 65535, 2147483647, 5.5, 6.6, 123.12345, 404.4443, true,
         'Hello World', 'a', 'abc', 'abcd..xyz', '2020-07-17 18:00:22.123', '2020-07-17 18:00:22.123456',
-        '2020-07-17', '18:00:22', 500, 88,'192.168.1.1');
+        '2020-07-17', '18:00:22', 500, 88,'192.168.1.1',
+        ST_GeomFromText('POINT(-122.3452 47.5925)', 4326),
+        ST_GeographyFromText('POINT(-122.3452 47.5925)'));
 
 INSERT INTO full_types_no_primary_key_with_debezium
 VALUES (1, '2', 32767, 65535, 2147483647, 5.5, 6.6, 123.12345, 404.4443, true,
         'Hello World', 'a', 'abc', 'abcd..xyz', '2020-07-17 18:00:22.123', '2020-07-17 18:00:22.123456',
-        '2020-07-17', '18:00:22', 500, 88,'192.168.1.1');
+        '2020-07-17', '18:00:22', 500, 88,'192.168.1.1',
+        ST_GeomFromText('POINT(-122.3452 47.5925)', 4326),
+        ST_GeographyFromText('POINT(-122.3452 47.5925)'));

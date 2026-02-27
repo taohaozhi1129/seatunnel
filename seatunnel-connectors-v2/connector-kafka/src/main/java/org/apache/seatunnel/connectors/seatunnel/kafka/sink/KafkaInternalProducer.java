@@ -74,6 +74,13 @@ public class KafkaInternalProducer<K, V> extends KafkaProducer<K, V> {
         super.abortTransaction();
     }
 
+    public void initTransactionId(String transactionalId) {
+        if (!transactionalId.equals(this.transactionalId)) {
+            setTransactionalId(transactionalId);
+            super.initTransactions();
+        }
+    }
+
     public void setTransactionalId(String transactionalId) {
         if (log.isDebugEnabled()) {
             log.debug(
@@ -124,15 +131,15 @@ public class KafkaInternalProducer<K, V> extends KafkaProducer<K, V> {
 
         Object transactionManager = getTransactionManager();
         synchronized (transactionManager) {
-            Object topicPartitionBookkeeper =
+            Object txnPartitionMap =
                     ReflectionUtils.getField(
                                     transactionManager,
                                     transactionManager.getClass(),
-                                    "topicPartitionBookkeeper")
+                                    "txnPartitionMap")
                             .get();
 
             transitionTransactionManagerStateTo(transactionManager, "INITIALIZING");
-            ReflectionUtils.invoke(topicPartitionBookkeeper, "reset");
+            ReflectionUtils.invoke(txnPartitionMap, "reset");
 
             ReflectionUtils.setField(
                     transactionManager,

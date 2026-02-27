@@ -107,19 +107,23 @@ public abstract class BaseHdfsFileSource extends BaseFileSource {
                                 .toUpperCase());
         // only json text csv type support user-defined schema now
         if (pluginConfig.hasPath(ConnectorCommonOptions.SCHEMA.key())) {
+            CatalogTable userDefinedCatalogTable = CatalogTableUtil.buildWithConfig(pluginConfig);
             switch (fileFormat) {
                 case CSV:
                 case TEXT:
                 case JSON:
                 case EXCEL:
                 case XML:
-                    CatalogTable userDefinedCatalogTable =
-                            CatalogTableUtil.buildWithConfig(pluginConfig);
                     readStrategy.setCatalogTable(userDefinedCatalogTable);
                     rowType = readStrategy.getActualSeaTunnelRowTypeInfo();
                     break;
                 case ORC:
                 case PARQUET:
+                    rowType =
+                            readStrategy.getSeaTunnelRowTypeInfoWithUserConfigRowType(
+                                    filePaths.get(0),
+                                    userDefinedCatalogTable.getSeaTunnelRowType());
+                    break;
                 case BINARY:
                     throw new FileConnectorException(
                             CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
@@ -132,8 +136,14 @@ public abstract class BaseHdfsFileSource extends BaseFileSource {
             }
         } else {
             if (filePaths.isEmpty()) {
-                // When the directory is empty, distribute default behavior schema
-                rowType = CatalogTableUtil.buildSimpleTextSchema();
+                // When there are no files (including sync_mode=update filtered all files), choose a
+                // compatible schema so that downstream can initialize correctly.
+                if (fileFormat == FileFormat.BINARY) {
+                    rowType = readStrategy.getSeaTunnelRowTypeInfo(path);
+                } else {
+                    // fallback schema when schema cannot be inferred from files
+                    rowType = CatalogTableUtil.buildSimpleTextSchema();
+                }
                 return;
             }
             try {

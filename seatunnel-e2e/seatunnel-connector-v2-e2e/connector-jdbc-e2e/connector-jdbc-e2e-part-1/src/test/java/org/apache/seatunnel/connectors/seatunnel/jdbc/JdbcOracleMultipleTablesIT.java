@@ -19,6 +19,7 @@
 package org.apache.seatunnel.connectors.seatunnel.jdbc;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
+import org.apache.seatunnel.shade.org.apache.commons.lang3.tuple.Pair;
 
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.e2e.common.TestResource;
@@ -26,8 +27,6 @@ import org.apache.seatunnel.e2e.common.TestSuiteBase;
 import org.apache.seatunnel.e2e.common.container.ContainerExtendedFactory;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
-
-import org.apache.commons.lang3.tuple.Pair;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -155,6 +154,35 @@ public class JdbcOracleMultipleTablesIT extends TestSuiteBase implements TestRes
 
         Container.ExecResult execResult =
                 container.executeJob("/jdbc_oracle_source_with_multiple_tables_to_sink.conf");
+        Assertions.assertEquals(0, execResult.getExitCode(), execResult.getStderr());
+
+        List<Executable> asserts =
+                TABLES.stream()
+                        .map(
+                                (Function<String, Executable>)
+                                        table ->
+                                                () ->
+                                                        Assertions.assertIterableEquals(
+                                                                query(
+                                                                        String.format(
+                                                                                "SELECT * FROM %s.%s order by INTEGER_COL asc",
+                                                                                SCHEMA, table)),
+                                                                query(
+                                                                        String.format(
+                                                                                "SELECT * FROM %s.%s order by INTEGER_COL asc",
+                                                                                SCHEMA,
+                                                                                "SINK_" + table))))
+                        .collect(Collectors.toList());
+        Assertions.assertAll(asserts);
+    }
+
+    @TestTemplate
+    public void testOracleJdbcRegexPatternE2e(TestContainer container)
+            throws IOException, InterruptedException, SQLException {
+        clearSinkTables();
+
+        Container.ExecResult execResult =
+                container.executeJob("/jdbc_oracle_source_with_pattern_tables_to_sink.conf");
         Assertions.assertEquals(0, execResult.getExitCode(), execResult.getStderr());
 
         List<Executable> asserts =

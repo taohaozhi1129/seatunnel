@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.source;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.source.SourceReader;
@@ -31,8 +33,6 @@ import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.Scroll
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.DefaultSeaTunnelRowDeserializer;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.ElasticsearchRecord;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.SeaTunnelRowDeserializer;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -120,19 +120,35 @@ public class ElasticsearchSourceReader
                 searchWithPointInTime(sourceIndexInfo, output, deserializer);
             } else {
                 log.info("Using Scroll API for index: {}", sourceIndexInfo.getIndex());
-                ScrollResult scrollResult =
-                        esRestClient.searchByScroll(
-                                sourceIndexInfo.getIndex(),
-                                sourceIndexInfo.getSource(),
-                                sourceIndexInfo.getQuery(),
-                                sourceIndexInfo.getScrollTime(),
-                                sourceIndexInfo.getScrollSize());
-                outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-                while (scrollResult.getDocs() != null && !scrollResult.getDocs().isEmpty()) {
-                    scrollResult =
-                            esRestClient.searchWithScrollId(
-                                    scrollResult.getScrollId(), sourceIndexInfo.getScrollTime());
+                String scrollId = null;
+                try {
+                    ScrollResult scrollResult =
+                            esRestClient.searchByScroll(
+                                    sourceIndexInfo.getIndex(),
+                                    sourceIndexInfo.getSource(),
+                                    sourceIndexInfo.getQuery(),
+                                    sourceIndexInfo.getScrollTime(),
+                                    sourceIndexInfo.getScrollSize(),
+                                    sourceIndexInfo.getRuntimeFields());
+                    scrollId = scrollResult.getScrollId();
+
                     outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    while (scrollResult.getDocs() != null && !scrollResult.getDocs().isEmpty()) {
+                        scrollResult =
+                                esRestClient.searchWithScrollId(
+                                        scrollResult.getScrollId(),
+                                        sourceIndexInfo.getScrollTime());
+                        scrollId = scrollResult.getScrollId();
+                        outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    }
+                } finally {
+                    if (StringUtils.isNotEmpty(scrollId)) {
+                        try {
+                            esRestClient.clearScroll(scrollId);
+                        } catch (Exception e) {
+                            log.warn("Failed to clear scroll ID: " + scrollId, e);
+                        }
+                    }
                 }
             }
         }
@@ -169,7 +185,8 @@ public class ElasticsearchSourceReader
                             sourceIndexInfo.getQuery(),
                             sourceIndexInfo.getPitBatchSize(),
                             null, // No search_after for first request
-                            sourceIndexInfo.getPitKeepAlive());
+                            sourceIndexInfo.getPitKeepAlive(),
+                            sourceIndexInfo.getRuntimeFields());
 
             // Output the results
             outputFromPitResult(pitResult, sourceIndexInfo, output, deserializer);
@@ -188,7 +205,8 @@ public class ElasticsearchSourceReader
                                 sourceIndexInfo.getQuery(),
                                 sourceIndexInfo.getPitBatchSize(),
                                 sourceIndexInfo.getSearchAfter(),
-                                sourceIndexInfo.getPitKeepAlive());
+                                sourceIndexInfo.getPitKeepAlive(),
+                                sourceIndexInfo.getRuntimeFields());
 
                 // Output the results
                 outputFromPitResult(pitResult, sourceIndexInfo, output, deserializer);

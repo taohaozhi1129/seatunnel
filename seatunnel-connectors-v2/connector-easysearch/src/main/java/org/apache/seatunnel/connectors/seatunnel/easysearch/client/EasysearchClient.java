@@ -158,10 +158,14 @@ public class EasysearchClient {
         restClientBuilder.setHttpClientConfigCallback(
                 httpClientBuilder -> {
                     if (username.isPresent()) {
+                        String passwordStr = null;
+                        if (password.isPresent()) {
+                            passwordStr = password.get();
+                        }
                         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
                         credentialsProvider.setCredentials(
                                 AuthScope.ANY,
-                                new UsernamePasswordCredentials(username.get(), password.get()));
+                                new UsernamePasswordCredentials(username.get(), passwordStr));
                         httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
                     }
 
@@ -286,6 +290,36 @@ public class EasysearchClient {
             restClient.close();
         } catch (IOException e) {
             log.warn("close easysearch connection error", e);
+        }
+    }
+
+    public boolean clearScroll(String scrollId) {
+        if (scrollId == null || scrollId.isEmpty()) {
+            return false;
+        }
+
+        String endpoint = "/_search/scroll";
+        Request request = new Request("DELETE", endpoint);
+        Map<String, String> param = new HashMap<>();
+        param.put("scroll_id", scrollId);
+        request.setJsonEntity(JsonUtils.toJsonString(param));
+
+        try {
+            Response response = restClient.performRequest(request);
+            if (response == null) {
+                log.warn("DELETE {} response null when clearing scrollId {}", endpoint, scrollId);
+                return false;
+            }
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == HttpStatus.SC_OK) {
+                return true;
+            } else {
+                log.warn("Failed to clear scrollId {}, status code={}", scrollId, statusCode);
+                return false;
+            }
+        } catch (IOException e) {
+            log.warn("Error clearing scrollId " + scrollId, e);
+            return false;
         }
     }
 
@@ -425,6 +459,29 @@ public class EasysearchClient {
         } catch (IOException ex) {
             throw new EasysearchConnectorException(
                     EasysearchConnectorErrorCode.GET_INDEX_DOCS_COUNT_FAILED, ex);
+        }
+    }
+
+    /**
+     * Instead of the getIndexDocsCount method to determine if the index exists,
+     *
+     * <p>
+     *
+     * <p>getIndexDocsCount throws an exception if the index does not exist
+     *
+     * <p>
+     *
+     * @param index index
+     * @return true or false
+     */
+    public boolean checkIndexExist(String index) {
+        Request request = new Request("HEAD", "/" + index.toLowerCase());
+        try {
+            Response response = restClient.performRequest(request);
+            int statusCode = response.getStatusLine().getStatusCode();
+            return statusCode == 200;
+        } catch (Exception ex) {
+            return false;
         }
     }
 

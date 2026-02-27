@@ -24,15 +24,15 @@ import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ObjectNode
 
 import org.apache.seatunnel.api.common.metrics.JobMetrics;
 import org.apache.seatunnel.engine.common.exception.SeaTunnelEngineException;
+import org.apache.seatunnel.engine.common.job.JobStatus;
+import org.apache.seatunnel.engine.common.job.JobStatusData;
 import org.apache.seatunnel.engine.core.job.ExecutionAddress;
 import org.apache.seatunnel.engine.core.job.JobDAGInfo;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
-import org.apache.seatunnel.engine.core.job.JobStatus;
-import org.apache.seatunnel.engine.core.job.JobStatusData;
 import org.apache.seatunnel.engine.core.job.PipelineStatus;
 import org.apache.seatunnel.engine.server.dag.physical.PipelineLocation;
 import org.apache.seatunnel.engine.server.execution.ExecutionState;
-import org.apache.seatunnel.engine.server.execution.PendingSourceState;
+import org.apache.seatunnel.engine.server.execution.PendingJobInfo;
 import org.apache.seatunnel.engine.server.execution.TaskGroupLocation;
 import org.apache.seatunnel.engine.server.telemetry.log.operation.CleanLogOperation;
 import org.apache.seatunnel.engine.server.utils.NodeEngineUtil;
@@ -46,7 +46,6 @@ import com.hazelcast.spi.impl.NodeEngine;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
-import scala.Tuple2;
 
 import java.io.Serializable;
 import java.net.UnknownHostException;
@@ -54,6 +53,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -84,7 +84,11 @@ public class JobHistoryService {
      */
     private final Map<Long, JobMaster> runningJobMasterMap;
 
-    private final Map<Long, Tuple2<PendingSourceState, JobMaster>> pendingJobMasterMap;
+    /**
+     * key: job id; <br>
+     * value: PendingJobInfo;
+     */
+    private final Map<Long, PendingJobInfo> pendingJobInfoMap;
 
     /** finishedJobVertexInfoImap key is jobId and value is JobDAGInfo */
     private final IMap<Long, JobDAGInfo> finishedJobDAGInfoImap;
@@ -105,7 +109,7 @@ public class JobHistoryService {
             NodeEngine nodeEngine,
             IMap<Object, Object> runningJobStateIMap,
             ILogger logger,
-            Map<Long, Tuple2<PendingSourceState, JobMaster>> pendingJobMasterMap,
+            Map<Long, PendingJobInfo> pendingJobMasterMap,
             Map<Long, JobMaster> runningJobMasterMap,
             IMap<Long, JobState> finishedJobStateImap,
             IMap<Long, JobMetrics> finishedJobMetricsImap,
@@ -114,7 +118,7 @@ public class JobHistoryService {
         this.nodeEngine = nodeEngine;
         this.runningJobStateIMap = runningJobStateIMap;
         this.logger = logger;
-        this.pendingJobMasterMap = pendingJobMasterMap;
+        this.pendingJobInfoMap = pendingJobMasterMap;
         this.runningJobMasterMap = runningJobMasterMap;
         this.finishedJobStateImap = finishedJobStateImap;
         this.finishedJobMetricsImap = finishedJobMetricsImap;
@@ -144,10 +148,38 @@ public class JobHistoryService {
                         .collect(Collectors.toList());
         Set<Long> runningJonIds =
                 runningJobStateList.stream().map(JobState::getJobId).collect(Collectors.toSet());
+
+        List<JobState> pendingJobStateList =
+                pendingJobInfoMap.entrySet().stream()
+                        .map(
+                                entry -> {
+                                    Long jobId = entry.getKey();
+                                    JobImmutableInformation jobImmutableInformation =
+                                            entry.getValue()
+                                                    .getJobMaster()
+                                                    .getJobImmutableInformation();
+                                    return new JobState(
+                                            jobId,
+                                            jobImmutableInformation.getJobName(),
+                                            JobStatus.PENDING,
+                                            jobImmutableInformation.getCreateTime(),
+                                            null,
+                                            null,
+                                            null,
+                                            null);
+                                })
+                        .collect(Collectors.toList());
+        Set<Long> pendingJobIds =
+                pendingJobStateList.stream().map(JobState::getJobId).collect(Collectors.toSet());
+
         Stream.concat(
-                        runningJobStateList.stream(),
+                        Stream.concat(runningJobStateList.stream(), pendingJobStateList.stream()),
                         finishedJobStateImap.values().stream()
-                                .filter(jobState -> !runningJonIds.contains(jobState.getJobId())))
+                                .filter(
+                                        jobState ->
+                                                !runningJonIds.contains(jobState.getJobId())
+                                                        && !pendingJobIds.contains(
+                                                                jobState.getJobId())))
                 .forEach(
                         jobState -> {
                             JobStatusData jobStatusData =
@@ -156,6 +188,7 @@ public class JobHistoryService {
                                             jobState.getJobName(),
                                             jobState.getJobStatus(),
                                             jobState.getSubmitTime(),
+                                            jobState.getStartTime(),
                                             jobState.getFinishTime());
                             status.add(jobStatusData);
                         });
@@ -164,15 +197,16 @@ public class JobHistoryService {
 
     // Get detailed status of a single job
     public JobState getJobDetailState(Long jobId) {
-        if (pendingJobMasterMap.containsKey(jobId)) {
+        if (pendingJobInfoMap.containsKey(jobId)) {
             // return pending job state
             JobImmutableInformation jobImmutableInformation =
-                    pendingJobMasterMap.get(jobId)._2.getJobImmutableInformation();
+                    pendingJobInfoMap.get(jobId).getJobMaster().getJobImmutableInformation();
             return new JobState(
                     jobId,
                     jobImmutableInformation.getJobName(),
                     JobStatus.PENDING,
                     jobImmutableInformation.getCreateTime(),
+                    null,
                     null,
                     null,
                     null);
@@ -210,7 +244,6 @@ public class JobHistoryService {
 
     public void storeFinishedJobState(JobMaster jobMaster) {
         JobState jobState = toJobStateMapper(jobMaster, false);
-        jobState.setFinishTime(System.currentTimeMillis());
         jobState.setErrorMessage(jobMaster.getErrorMessage());
         finishedJobStateImap.put(jobState.jobId, jobState, finishedJobExpireTime, TimeUnit.MINUTES);
     }
@@ -222,7 +255,6 @@ public class JobHistoryService {
     }
 
     private JobState toJobStateMapper(JobMaster jobMaster, boolean simple) {
-
         Long jobId = jobMaster.getJobImmutableInformation().getJobId();
         Map<PipelineLocation, PipelineStateData> pipelineStateMapperMap = new HashMap<>();
         if (!simple) {
@@ -270,11 +302,26 @@ public class JobHistoryService {
                 logger.warning("get job pipeline state err", e);
             }
         }
-        JobStatus jobStatus = (JobStatus) runningJobStateIMap.get(jobId);
+        JobStatus jobStatus =
+                Optional.ofNullable(runningJobStateIMap.get(jobId))
+                        .map(status -> ((JobStatus) status))
+                        .orElse(jobMaster.getJobStatus());
         String jobName = jobMaster.getJobImmutableInformation().getJobName();
         long submitTime = jobMaster.getJobImmutableInformation().getCreateTime();
+        Long startTime = jobMaster.getStateTimestamp(JobStatus.SCHEDULED);
+        Long finishTime = null;
+        if (jobStatus != null && jobStatus.isEndState()) {
+            finishTime = jobMaster.getStateTimestamp(jobStatus);
+        }
         return new JobState(
-                jobId, jobName, jobStatus, submitTime, null, pipelineStateMapperMap, null);
+                jobId,
+                jobName,
+                jobStatus,
+                submitTime,
+                startTime,
+                finishTime,
+                pipelineStateMapperMap,
+                null);
     }
 
     public void storeJobInfo(long jobId, JobDAGInfo jobInfo) {
@@ -289,6 +336,7 @@ public class JobHistoryService {
         private String jobName;
         private JobStatus jobStatus;
         private long submitTime;
+        private Long startTime;
         private Long finishTime;
         private Map<PipelineLocation, PipelineStateData> pipelineStateMapperMap;
         private String errorMessage;

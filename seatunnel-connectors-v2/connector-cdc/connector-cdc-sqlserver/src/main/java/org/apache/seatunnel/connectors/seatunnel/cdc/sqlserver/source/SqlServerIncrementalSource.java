@@ -36,11 +36,12 @@ import org.apache.seatunnel.connectors.cdc.debezium.row.DebeziumJsonDeserializeS
 import org.apache.seatunnel.connectors.cdc.debezium.row.SeaTunnelRowDebeziumDeserializeSchema;
 import org.apache.seatunnel.connectors.seatunnel.cdc.sqlserver.config.SqlServerSourceConfigFactory;
 import org.apache.seatunnel.connectors.seatunnel.cdc.sqlserver.source.offset.LsnOffsetFactory;
-import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.JdbcCatalogOptions;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.sqlserver.SqlServerURLParser;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcCommonOptions;
 
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 
 public class SqlServerIncrementalSource<T> extends IncrementalSource<T, JdbcSourceConfig>
         implements SupportParallelism {
@@ -58,12 +59,12 @@ public class SqlServerIncrementalSource<T> extends IncrementalSource<T, JdbcSour
 
     @Override
     public Option<StartupMode> getStartupModeOption() {
-        return SqlServerSourceOptions.STARTUP_MODE;
+        return SqlServerIncrementalSourceOptions.STARTUP_MODE;
     }
 
     @Override
     public Option<StopMode> getStopModeOption() {
-        return SqlServerSourceOptions.STOP_MODE;
+        return SqlServerIncrementalSourceOptions.STOP_MODE;
     }
 
     @Override
@@ -72,8 +73,7 @@ public class SqlServerIncrementalSource<T> extends IncrementalSource<T, JdbcSour
         configFactory.fromReadonlyConfig(readonlyConfig);
         configFactory.startupOptions(startupConfig);
         configFactory.stopOptions(stopConfig);
-        JdbcUrlUtil.UrlInfo urlInfo =
-                SqlServerURLParser.parse(config.get(JdbcCatalogOptions.BASE_URL));
+        JdbcUrlUtil.UrlInfo urlInfo = SqlServerURLParser.parse(config.get(JdbcCommonOptions.URL));
         configFactory.originUrl(urlInfo.getOrigin());
         configFactory.hostname(urlInfo.getHost());
         configFactory.port(urlInfo.getPort());
@@ -108,5 +108,10 @@ public class SqlServerIncrementalSource<T> extends IncrementalSource<T, JdbcSour
     public OffsetFactory createOffsetFactory(ReadonlyConfig config) {
         return new LsnOffsetFactory(
                 (SqlServerSourceConfigFactory) configFactory, (SqlServerDialect) dataSourceDialect);
+    }
+
+    @Override
+    public Optional<String> driverName() {
+        return Optional.of("com.microsoft.sqlserver.jdbc.SQLServerDriver");
     }
 }

@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -26,8 +28,6 @@ import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkOptions;
-
-import org.apache.commons.lang3.StringUtils;
 
 import com.google.auto.service.AutoService;
 
@@ -60,20 +60,25 @@ public class MilvusSinkFactory implements TableSinkFactory {
 
     private CatalogTable renameCatalogTable(
             ReadonlyConfig config, CatalogTable sourceCatalogTable) {
-        TableIdentifier sourceTableId = sourceCatalogTable.getTableId();
-        String databaseName;
+        TableIdentifier sourceTable = sourceCatalogTable.getTableId();
+        String databaseName, tableName;
         if (StringUtils.isNotEmpty(config.get(MilvusSinkOptions.DATABASE))) {
             databaseName = config.get(MilvusSinkOptions.DATABASE);
         } else {
-            databaseName = sourceTableId.getDatabaseName();
+            databaseName = sourceTable.getDatabaseName();
+        }
+        if (StringUtils.isNotEmpty(config.get(MilvusSinkOptions.COLLECTION))) {
+            tableName = config.get(MilvusSinkOptions.COLLECTION);
+        } else {
+            tableName = sourceTable.getTableName();
         }
 
         TableIdentifier newTableId =
                 TableIdentifier.of(
-                        sourceTableId.getCatalogName(),
+                        sourceTable.getCatalogName(),
                         databaseName,
-                        sourceTableId.getSchemaName(),
-                        sourceTableId.getTableName());
+                        sourceTable.getSchemaName(),
+                        tableName);
 
         return CatalogTable.of(newTableId, sourceCatalogTable);
     }

@@ -28,22 +28,22 @@ import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
 import org.apache.seatunnel.connectors.cdc.base.config.JdbcSourceTableConfig;
-import org.apache.seatunnel.connectors.cdc.base.option.JdbcSourceOptions;
 import org.apache.seatunnel.connectors.cdc.base.option.SourceOptions;
 import org.apache.seatunnel.connectors.cdc.base.option.StartupMode;
 import org.apache.seatunnel.connectors.cdc.base.option.StopMode;
 import org.apache.seatunnel.connectors.cdc.base.source.BaseChangeStreamTableSourceFactory;
 import org.apache.seatunnel.connectors.cdc.base.utils.CatalogTableUtils;
 import org.apache.seatunnel.connectors.seatunnel.cdc.oracle.config.OracleSourceConfigFactory;
-import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.JdbcCatalogOptions;
 
 import com.google.auto.service.AutoService;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Optional;
 
 @AutoService(Factory.class)
+@Slf4j
 public class OracleIncrementalSourceFactory extends BaseChangeStreamTableSourceFactory {
     @Override
     public String factoryIdentifier() {
@@ -52,44 +52,52 @@ public class OracleIncrementalSourceFactory extends BaseChangeStreamTableSourceF
 
     @Override
     public OptionRule optionRule() {
-        return JdbcSourceOptions.getBaseRule()
-                .required(JdbcSourceOptions.USERNAME, JdbcSourceOptions.PASSWORD)
+        return OracleIncrementalSourceOptions.getBaseRule()
+                .required(
+                        OracleIncrementalSourceOptions.USERNAME,
+                        OracleIncrementalSourceOptions.PASSWORD)
                 .exclusive(ConnectorCommonOptions.TABLE_NAMES, ConnectorCommonOptions.TABLE_PATTERN)
-                .bundled(JdbcSourceOptions.HOSTNAME, JdbcSourceOptions.PORT)
+                .bundled(
+                        OracleIncrementalSourceOptions.HOSTNAME,
+                        OracleIncrementalSourceOptions.PORT)
                 .optional(
-                        JdbcCatalogOptions.BASE_URL,
-                        JdbcSourceOptions.DATABASE_NAMES,
-                        OracleSourceOptions.SCHEMA_NAMES,
-                        OracleSourceOptions.USE_SELECT_COUNT,
-                        OracleSourceOptions.SKIP_ANALYZE,
-                        JdbcSourceOptions.SERVER_TIME_ZONE,
-                        JdbcSourceOptions.CONNECT_TIMEOUT_MS,
-                        JdbcSourceOptions.CONNECT_MAX_RETRIES,
-                        JdbcSourceOptions.CONNECTION_POOL_SIZE,
-                        JdbcSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND,
-                        JdbcSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND,
-                        JdbcSourceOptions.SAMPLE_SHARDING_THRESHOLD,
-                        JdbcSourceOptions.TABLE_NAMES_CONFIG,
-                        JdbcSourceOptions.SCHEMA_CHANGES_ENABLED)
-                .optional(OracleSourceOptions.STARTUP_MODE, OracleSourceOptions.STOP_MODE)
+                        OracleIncrementalSourceOptions.URL,
+                        OracleIncrementalSourceOptions.DATABASE_NAMES,
+                        OracleIncrementalSourceOptions.SCHEMA_NAMES,
+                        OracleIncrementalSourceOptions.USE_SELECT_COUNT,
+                        OracleIncrementalSourceOptions.SKIP_ANALYZE,
+                        OracleIncrementalSourceOptions.SERVER_TIME_ZONE,
+                        OracleIncrementalSourceOptions.CONNECT_TIMEOUT_MS,
+                        OracleIncrementalSourceOptions.CONNECT_MAX_RETRIES,
+                        OracleIncrementalSourceOptions.CONNECTION_POOL_SIZE,
+                        OracleIncrementalSourceOptions
+                                .CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND,
+                        OracleIncrementalSourceOptions
+                                .CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND,
+                        OracleIncrementalSourceOptions.SAMPLE_SHARDING_THRESHOLD,
+                        OracleIncrementalSourceOptions.TABLE_NAMES_CONFIG,
+                        OracleIncrementalSourceOptions.SCHEMA_CHANGES_ENABLED)
+                .optional(
+                        OracleIncrementalSourceOptions.STARTUP_MODE,
+                        OracleIncrementalSourceOptions.STOP_MODE)
                 .conditional(
-                        OracleSourceOptions.STARTUP_MODE,
+                        OracleIncrementalSourceOptions.STARTUP_MODE,
                         StartupMode.SPECIFIC,
                         SourceOptions.STARTUP_SPECIFIC_OFFSET_POS)
                 .conditional(
-                        OracleSourceOptions.STOP_MODE,
+                        OracleIncrementalSourceOptions.STOP_MODE,
                         StopMode.SPECIFIC,
                         SourceOptions.STOP_SPECIFIC_OFFSET_POS)
                 .conditional(
-                        OracleSourceOptions.STARTUP_MODE,
+                        OracleIncrementalSourceOptions.STARTUP_MODE,
                         StartupMode.TIMESTAMP,
                         SourceOptions.STARTUP_TIMESTAMP)
                 .conditional(
-                        OracleSourceOptions.STOP_MODE,
+                        OracleIncrementalSourceOptions.STOP_MODE,
                         StopMode.TIMESTAMP,
                         SourceOptions.STOP_TIMESTAMP)
                 .conditional(
-                        OracleSourceOptions.STARTUP_MODE,
+                        OracleIncrementalSourceOptions.STARTUP_MODE,
                         StartupMode.INITIAL,
                         SourceOptions.EXACTLY_ONCE)
                 .build();
@@ -105,6 +113,12 @@ public class OracleIncrementalSourceFactory extends BaseChangeStreamTableSourceF
             TableSource<T, SplitT, StateT> restoreSource(
                     TableSourceFactoryContext context, List<CatalogTable> restoreTables) {
         return () -> {
+            // Load the JDBC driver in to DriverManager
+            try {
+                Class.forName("oracle.jdbc.OracleDriver");
+            } catch (Exception e) {
+                log.warn("Failed to load JDBC driver {}", "oracle.jdbc.OracleDriver", e);
+            }
             List<CatalogTable> catalogTables =
                     CatalogTableUtil.getCatalogTables(
                             context.getOptions(), context.getClassLoader());
@@ -134,7 +148,8 @@ public class OracleIncrementalSourceFactory extends BaseChangeStreamTableSourceF
             }
 
             Optional<List<JdbcSourceTableConfig>> tableConfigs =
-                    context.getOptions().getOptional(JdbcSourceOptions.TABLE_NAMES_CONFIG);
+                    context.getOptions()
+                            .getOptional(OracleIncrementalSourceOptions.TABLE_NAMES_CONFIG);
             if (tableConfigs.isPresent()) {
                 catalogTables =
                         CatalogTableUtils.mergeCatalogTableConfig(

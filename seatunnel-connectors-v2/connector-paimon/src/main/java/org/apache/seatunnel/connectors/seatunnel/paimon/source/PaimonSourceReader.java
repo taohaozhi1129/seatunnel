@@ -30,7 +30,7 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.reader.RecordReader;
 import org.apache.paimon.reader.RecordReaderIterator;
 import org.apache.paimon.table.FileStoreTable;
-import org.apache.paimon.table.Table;
+import org.apache.paimon.table.source.ReadBuilder;
 import org.apache.paimon.table.source.TableRead;
 
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +38,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -48,17 +50,23 @@ public class PaimonSourceReader implements SourceReader<SeaTunnelRow, PaimonSour
 
     private final Deque<PaimonSourceSplit> sourceSplits = new ConcurrentLinkedDeque<>();
     private final SourceReader.Context context;
-    private final Table table;
-    private final SeaTunnelRowType seaTunnelRowType;
+    private final Map<String, FileStoreTable> tables;
+    private final Map<String, SeaTunnelRowType> seaTunnelRowTypes;
+    private final Map<String, TableRead> tableReads;
     private volatile boolean noMoreSplit;
-    private final TableRead tableRead;
 
     public PaimonSourceReader(
-            Context context, Table table, SeaTunnelRowType seaTunnelRowType, TableRead tableRead) {
+            Context context,
+            Map<String, FileStoreTable> tables,
+            Map<String, SeaTunnelRowType> seaTunnelRowTypes,
+            Map<String, ReadBuilder> readBuilders) {
         this.context = context;
-        this.table = table;
-        this.seaTunnelRowType = seaTunnelRowType;
-        this.tableRead = tableRead;
+        this.tables = tables;
+        this.seaTunnelRowTypes = seaTunnelRowTypes;
+        this.tableReads = new HashMap<>();
+        for (Map.Entry<String, ReadBuilder> entry : readBuilders.entrySet()) {
+            this.tableReads.put(entry.getKey(), entry.getValue().newRead());
+        }
     }
 
     @Override
@@ -76,16 +84,18 @@ public class PaimonSourceReader implements SourceReader<SeaTunnelRow, PaimonSour
         synchronized (output.getCheckpointLock()) {
             final PaimonSourceSplit split = sourceSplits.poll();
             if (Objects.nonNull(split)) {
-                // read logic
+                String tableId = split.getTableId();
+                FileStoreTable table = tables.get(tableId);
+                SeaTunnelRowType seaTunnelRowType = seaTunnelRowTypes.get(tableId);
+                TableRead tableRead = tableReads.get(tableId);
                 try (final RecordReader<InternalRow> reader =
-                        tableRead.executeFilter().createReader(split.getSplit())) {
-                    final RecordReaderIterator<InternalRow> rowIterator =
-                            new RecordReaderIterator<>(reader);
+                                tableRead.executeFilter().createReader(split.getSplit());
+                        final RecordReaderIterator<InternalRow> rowIterator =
+                                new RecordReaderIterator<>(reader)) {
                     while (rowIterator.hasNext()) {
                         final InternalRow row = rowIterator.next();
                         final SeaTunnelRow seaTunnelRow =
-                                RowConverter.convert(
-                                        row, seaTunnelRowType, ((FileStoreTable) table).schema());
+                                RowConverter.convert(row, seaTunnelRowType, table.schema());
                         if (Boundedness.UNBOUNDED.equals(context.getBoundedness())) {
                             RowKind rowKind =
                                     RowKindConverter.convertPaimonRowKind2SeatunnelRowkind(
@@ -94,6 +104,7 @@ public class PaimonSourceReader implements SourceReader<SeaTunnelRow, PaimonSour
                                 seaTunnelRow.setRowKind(rowKind);
                             }
                         }
+                        seaTunnelRow.setTableId(tableId);
                         output.collect(seaTunnelRow);
                     }
                 }

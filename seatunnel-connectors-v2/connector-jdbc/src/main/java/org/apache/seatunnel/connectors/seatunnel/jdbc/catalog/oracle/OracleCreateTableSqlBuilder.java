@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.oracle;
 
+import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
+
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
@@ -24,8 +26,6 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.utils.CatalogUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.DatabaseIdentifier;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.oracle.OracleTypeConverter;
-
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,13 +36,15 @@ public class OracleCreateTableSqlBuilder {
 
     private List<Column> columns;
     private PrimaryKey primaryKey;
-    private String sourceCatalogName;
+    private String comment;
+    protected String sourceCatalogName;
     private String fieldIde;
     private boolean createIndex;
 
     public OracleCreateTableSqlBuilder(CatalogTable catalogTable, boolean createIndex) {
         this.columns = catalogTable.getTableSchema().getColumns();
         this.primaryKey = catalogTable.getTableSchema().getPrimaryKey();
+        this.comment = catalogTable.getComment();
         this.sourceCatalogName = catalogTable.getCatalogName();
         this.fieldIde = catalogTable.getOptions().get("fieldIde");
         this.createIndex = createIndex;
@@ -72,6 +74,15 @@ public class OracleCreateTableSqlBuilder {
         createTableSql.append(String.join(",\n", columnSqls));
         createTableSql.append("\n)");
         sqls.add(createTableSql.toString());
+        if (comment != null) {
+            String commentSql =
+                    "COMMENT ON TABLE "
+                            + tablePath.getSchemaAndTableName("\"")
+                            + " IS '"
+                            + comment
+                            + "'";
+            sqls.add(commentSql);
+        }
         List<String> commentSqls =
                 columns.stream()
                         .filter(column -> StringUtils.isNotBlank(column.getComment()))
@@ -84,7 +95,7 @@ public class OracleCreateTableSqlBuilder {
         return sqls;
     }
 
-    String buildColumnSql(Column column) {
+    protected String buildColumnSql(Column column) {
         StringBuilder columnSql = new StringBuilder();
         columnSql.append("\"").append(column.getName()).append("\" ");
 
